@@ -21,6 +21,7 @@ NT.toast = (msg, ms = 2200) => {
 };
 
 NT.download = (filename, content, type) => {
+  if (NT.embedded && typeof content === 'string') return NT.ui.showText(filename, content);
   const blob = content instanceof Blob ? content : new Blob([content], { type: type || 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -333,12 +333,13 @@ NT.Editor = class {
     this.onSelection();
   }
 
-  link() {
+  async link() {
     const sel = window.getSelection();
     if (!sel.rangeCount) return;
     const a = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement).closest('a');
     this.saveSel();
-    const url = window.prompt('링크 주소를 입력하세요 (비우면 링크 해제)', a ? a.getAttribute('href') : 'https://');
+    const url = await NT.ui.ask('링크', { value: a ? a.getAttribute('href') : 'https://', placeholder: 'https://', hint: '비워 두면 링크를 해제해요.', okLabel: '적용' });
+    this.el.focus();
     this.restoreSel();
     if (url === null) return;
     this.history.record();

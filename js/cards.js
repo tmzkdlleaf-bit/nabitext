@@ -60,7 +60,10 @@ NT.cards = (() => {
       const save = document.createElement('button');
       save.className = 'btn small ghost card-save';
       save.textContent = `${i + 1}번 카드 PNG`;
-      save.addEventListener('click', () => exportCard(card, i + 1, title));
+      save.addEventListener('click', async () => {
+        const img = await exportCard(card, i + 1, title);
+        if (img) NT.ui.showImages([img]);
+      });
       frame.appendChild(save);
       wrap.appendChild(frame);
       fit(card, doc, isCover);
@@ -96,8 +99,10 @@ NT.cards = (() => {
       let url;
       try { url = await htmlToImage.toPng(card, opt); }
       catch { url = await htmlToImage.toPng(card, { ...opt, skipFonts: true }); } // 웹폰트를 못 가져오면 시스템 글꼴로라도
+      const name = `${NT.safeFilename(title)}-${String(n).padStart(2, '0')}.png`;
+      if (NT.embedded) return { src: url, name };
       const a = document.createElement('a');
-      a.href = url; a.download = `${NT.safeFilename(title)}-${String(n).padStart(2, '0')}.png`;
+      a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
     } catch (e) {
       console.error(e);
@@ -109,10 +114,13 @@ NT.cards = (() => {
     const cards = NT.$$('#cards .card');
     if (!cards.length) return;
     NT.toast(`카드 ${cards.length}장을 저장하는 중…`, 4000);
+    const imgs = [];
     for (let i = 0; i < cards.length; i++) {
-      await exportCard(cards[i], i + 1, title);
-      await new Promise(r => setTimeout(r, 350)); // 연속 다운로드 차단을 피하려고 잠깐 쉰다
+      const img = await exportCard(cards[i], i + 1, title);
+      if (img) imgs.push(img);
+      else await new Promise(r => setTimeout(r, 350)); // 연속 다운로드 차단을 피하려고 잠깐 쉰다
     }
+    if (imgs.length) NT.ui.showImages(imgs);
   }
 
   return { render, exportAll };

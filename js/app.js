@@ -68,13 +68,13 @@
       </li>`).join('');
   }
 
-  $('#doc-list').addEventListener('click', e => {
+  $('#doc-list').addEventListener('click', async e => {
     const li = e.target.closest('li');
     if (!li) return;
     const id = li.dataset.id;
     if (e.target.closest('.doc-del')) {
       const d = NT.store.load(id);
-      if (!confirm(`“${(d && d.title) || '제목 없는 문서'}”을(를) 지울까요? 되돌릴 수 없어요.`)) return;
+      if (!await NT.ui.confirm('문서 삭제', `“${(d && d.title) || '제목 없는 문서'}”을(를) 지울까요? 되돌릴 수 없어요.`, '삭제', true)) return;
       NT.store.remove(id);
       if (doc && doc.id === id) {
         doc = null;
@@ -317,6 +317,7 @@
   window.addEventListener('afterprint', () => setMode('edit'));
 
   /* ─ 시작 ─ */
+  if (NT.embedded) $('[data-export="pdf"]').hidden = true; // 임베드된 화면에서는 인쇄 창을 열 수 없다
   const prefs = NT.store.prefs();
   if (prefs.ui) document.documentElement.dataset.theme = prefs.ui;
   if (prefs.panelClosed || window.innerWidth < 900) document.body.classList.add('panel-closed');
