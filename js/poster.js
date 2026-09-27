@@ -3,7 +3,7 @@ NT.poster = (() => {
   const { $, $$ } = NT;
   const A = NT.posterAssets;
   let state = null, onChange = null, editorEl = null, getTitle = () => '';
-  let selected = null, selFig = null, zoom = 'fit', renderToken = 0, pagesMeta = [], tool = 'deco', onDocChange = null;
+  let selected = null, selFig = null, selBox = null, zoom = 'fit', renderToken = 0, pagesMeta = [], tool = 'deco', onDocChange = null;
 
   /* ─ 템플릿 ─ */
   const st = (gen, x, y, w, extra = {}) => ({ id: NT.uid(), kind: 'builtin', gen, seed: Math.floor(Math.random() * 1e6) + 1, params: {}, x, y, w,
@@ -89,20 +89,27 @@ NT.poster = (() => {
   const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
   const font = id => NT.fontById(id).stack;
 
-  /* 글 영역: 페이지 위의 사각형 (x, y, 폭, 아래 여백) */
-  const geom = () => {
-    const t = state.text, W = state.page.w;
-    const left = Math.max(0, Math.min(t.x, W - 60));
-    return { left, width: Math.max(60, Math.min(t.w, W - left)), top: t.y, bottom: t.bottom };
-  };
+  /* 글 상자: 페이지 위에 여러 개 놓는 사각형. 글은 1번 상자부터 차례로 흘러 넘어간다.
+   * h가 0이면 '자동 높이' (글 길이만큼 늘어난다). */
+  const BOX_DEFAULT = { h: 0, bg: 'none', fill: '#ffffff', fillOpacity: 0.85, border: 'none', borderColor: '#222222', borderWidth: 1.5,
+    radius: 0, pad: 0, shadow: false, useColor: false, textColor: '#ffffff' };
+  const newBox = (x, y, w, h, extra = {}) => ({ id: NT.uid(), ...BOX_DEFAULT, x, y, w, h, ...extra });
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const boxById = id => state.boxes.find(b => b.id === id);
 
   /* 예전 저장본·템플릿에 없는 값을 채운다 */
   function normalize(s) {
     const W = s.page.w, f = s.frame, b = s.body;
-    if (!s.text) {
+    if (!s.boxes) {
       const px = b.padX ?? 60;
-      s.text = { x: f.x + px, y: f.top + (b.padTop ?? 60), w: W - 2 * (f.x + px), bottom: f.bottom + (b.padBottom ?? 80) };
+      const t = s.text || { x: f.x + px, y: f.top + (b.padTop ?? 60), w: W - 2 * (f.x + px), bottom: f.bottom + (b.padBottom ?? 80) };
+      s.boxes = [newBox(t.x, t.y, t.w, 0)];
+      s.page.padBottom = t.bottom;
     }
+    delete s.text;
+    s.boxes = s.boxes.map(x => ({ ...BOX_DEFAULT, ...x }));
+    if (s.page.padBottom == null) s.page.padBottom = 120;
+    if (s.flowBreak == null) s.flowBreak = false;
     s.bg = { fit: 'cover', posX: 50, posY: 50, zoom: 1, blur: 0, bright: 1, overlay: '#000000', overlayOpacity: 0, iw: 0, ih: 0, ...s.bg };
     return s;
   }
@@ -129,7 +136,7 @@ NT.poster = (() => {
 
   /* ─ 페이지 만들기 ─ */
   function makePage(stageEl, idx) {
-    const s = state, g = geom();
+    const s = state;
     const wrap = document.createElement('div');
     wrap.className = 'pp-wrap';
     const page = document.createElement('div');
@@ -139,7 +146,7 @@ NT.poster = (() => {
     page.style.backgroundColor = s.bg.color;
     const tex = A.texture(s.bg.texture, s.bg.color);
     if (tex) page.style.backgroundImage = `url("${tex}")`;
-    page.innerHTML = `<div class="pp-bgimg"></div><div class="pp-overlay"></div><div class="pp-border"></div><div class="pp-layer pp-back"></div><div class="pp-frame"></div><h1 class="pp-title"></h1><div class="pp-body"></div><div class="pp-layer pp-front"></div><div class="pp-textbox"><span class="tb tb-l"></span><span class="tb tb-r"></span><span class="tb tb-t"></span><span class="tb tb-b"></span><em>✥ 글 영역 (끌어서 이동)</em></div><div class="pp-marks"></div>`;
+    page.innerHTML = `<div class="pp-bgimg"></div><div class="pp-overlay"></div><div class="pp-border"></div><div class="pp-layer pp-back"></div><div class="pp-frame"></div><h1 class="pp-title"></h1><div class="pp-boxes"></div><div class="pp-layer pp-front"></div><div class="pp-marks"></div>`;
 
     const fr = page.querySelector('.pp-frame'), f = s.frame;
     Object.assign(fr.style, { left: f.x + 'px', right: f.x + 'px', top: f.top + 'px', bottom: f.bottom + 'px' });
@@ -162,26 +169,48 @@ NT.poster = (() => {
       Object.assign(t.style, { top: s.title.y + 'px', fontFamily: font(s.title.font), fontSize: s.title.size + 'px', color: s.title.color });
     } else t.remove();
 
-    const body = page.querySelector('.pp-body'), b = s.body;
+    wrap.appendChild(page);
+    stageEl.appendChild(wrap);
+    return { wrap, page, bodies: [] };
+  }
+
+  function boxStyle(el, bx) {
+    const W = state.page.w, x = clamp(bx.x, -W + 40, W - 40);
+    Object.assign(el.style, {
+      left: x + 'px', top: bx.y + 'px', width: clamp(bx.w, 40, W * 2) + 'px', height: bx.h > 0 ? bx.h + 'px' : 'auto',
+      padding: bx.pad + 'px', borderRadius: bx.radius + 'px',
+      background: bx.bg === 'fill' ? rgba(bx.fill, bx.fillOpacity) : 'transparent',
+      border: bx.border === 'line' ? `${bx.borderWidth}px solid ${bx.borderColor}` : '0',
+      boxShadow: bx.shadow ? '0 18px 44px -14px rgba(0, 0, 0, 0.45)' : 'none'
+    });
+    el.classList.toggle('box-selected', bx.id === selBox);
+  }
+
+  function makeBox(page, bx, i) {
+    const b = state.body;
+    const el = document.createElement('div');
+    el.className = 'pp-box';
+    el.dataset.box = bx.id;
+    el.innerHTML = `<div class="pp-body"></div><div class="pp-boxui"><span class="tb tb-l"></span><span class="tb tb-r"></span><span class="tb tb-t"></span><span class="tb tb-b"></span><em title="글이 흐르는 순서">${i + 1}</em></div>`;
+    boxStyle(el, bx);
+    const body = el.querySelector('.pp-body');
     Object.assign(body.style, {
-      left: g.left + 'px', width: g.width + 'px', top: g.top + 'px',
       fontFamily: font(b.font), fontSize: b.size + 'px', lineHeight: b.lh, letterSpacing: b.ls + 'em',
-      color: b.color, textAlign: b.align
+      color: bx.useColor ? bx.textColor : b.color, textAlign: b.align
     });
     body.style.setProperty('--pp-indent', b.indent + 'em');
     body.style.setProperty('--pp-gap', b.gap + 'em');
     body.style.setProperty('--pp-quote', b.quoteColor);
     body.style.setProperty('--pp-accent', b.dividerColor);
-
-    wrap.appendChild(page);
-    stageEl.appendChild(wrap);
-    return { wrap, page, body };
+    body.style.setProperty('--pp-pad', bx.pad + 'px');
+    page.querySelector('.pp-boxes').appendChild(el);
+    return { el, body };
   }
 
   /* 본문 블록을 복제해 글 이미지용으로 바꾼다 */
   let dividerSrc = '';
   function collectBlocks() {
-    const out = [], g = geom();
+    const out = [];
     let si = -1;
     for (const el of editorEl.children) {
       si++;
@@ -198,7 +227,7 @@ NT.poster = (() => {
       if (el.tagName === 'H1' && el === editorEl.firstElementChild && el.textContent.trim() === getTitle()) continue; // 제목과 같은 첫 제목은 중복이라 뺀다
       const c = NT.convert.cleanClone(el);
       c.dataset.si = si;
-      if (c.tagName === 'FIGURE') styleFigure(c, g, si);
+      if (c.tagName === 'FIGURE') styleFigure(c, si);
       if (c.tagName === 'P' && !c.textContent.trim() && !c.querySelector('img')) c.classList.add('pp-blank');
       out.push(c);
     }
@@ -215,15 +244,15 @@ NT.poster = (() => {
   }
 
   /* 문단 사이 이미지: 폭(%), 정렬, 위아래 여백은 편집기의 figure에 data-*로 저장된다 */
-  function styleFigure(c, g, si) {
+  function styleFigure(c, si) {
     const w = +(c.dataset.w || 100), align = c.dataset.align || 'center', gap = c.dataset.gap ?? '1';
     const cap = c.querySelector('figcaption');
     if (cap && !cap.textContent.trim()) cap.remove();
     c.classList.add('pp-fig');
     c.style.margin = `${gap}em 0`;
     if (align === 'full') {
-      c.style.width = state.page.w + 'px';
-      c.style.marginLeft = -g.left + 'px';
+      c.style.marginLeft = 'calc(-1 * var(--pp-pad))';
+      c.style.marginRight = 'calc(-1 * var(--pp-pad))';
     } else {
       c.style.width = w + '%';
       if (align === 'center') { c.style.marginLeft = 'auto'; c.style.marginRight = 'auto'; }
@@ -321,8 +350,9 @@ NT.poster = (() => {
 
     stage.innerHTML = '';
     pagesMeta = [];
-    const blocks = collectBlocks();
-    const g = geom(), W = state.page.w;
+    const queue = collectBlocks(), W = state.page.w, padB = state.page.padBottom;
+    let fixedH = state.page.h;
+    if (fixedH === -1) fixedH = state.bg.image && state.bg.iw ? Math.round(W * state.bg.ih / state.bg.iw) : 0;
     const finish = (p, H) => {
       p.page.style.height = H + 'px';
       paintBg(p.page, H);
@@ -333,31 +363,42 @@ NT.poster = (() => {
       pagesMeta.push({ ...p, H });
     };
 
-    let fixedH = state.page.h;
-    if (fixedH === -1) fixedH = state.bg.image && state.bg.iw ? Math.round(W * state.bg.ih / state.bg.iw) : 0;
-    if (!fixedH) {
-      const p = makePage(stage, 0);
-      blocks.forEach(b => p.body.appendChild(b));
-      finish(p, Math.max(state.page.minH, Math.ceil(g.top + p.body.scrollHeight + g.bottom)));
-    } else {
-      const H = fixedH, maxH = Math.max(80, H - g.top - g.bottom);
-      let p = makePage(stage, 0), queue = blocks.slice(), guard = 0;
-      while (queue.length && guard++ < 2000) {
-        const b = queue.shift();
-        if (!p.body.children.length && b.classList.contains('pp-blank')) continue;
-        p.body.appendChild(b);
-        if (p.body.scrollHeight <= maxH + 0.5) continue;
+    // 상자 하나를 채운다. 넘치는 문단은 어절 단위로 잘라 다음 상자로 보낸다.
+    const fill = (body, cap) => {
+      let placed = false;
+      while (queue.length) {
+        const b = queue[0];
+        if (state.flowBreak && b.classList.contains('pp-div')) { queue.shift(); if (body.children.length) return placed; continue; }
+        if (!body.children.length && b.classList.contains('pp-blank')) { queue.shift(); continue; }
+        queue.shift();
+        body.appendChild(b);
+        if (body.scrollHeight <= cap + 0.5) { placed = true; continue; }
         b.remove();
-        const parts = /^(P|BLOCKQUOTE|H2|H3|ASIDE)$/.test(b.tagName) ? splitToFit(p.body, b, maxH) : null;
-        if (parts) { p.body.appendChild(parts[0]); queue.unshift(parts[1]); }
-        else if (!p.body.children.length) { p.body.appendChild(b); } // 한 장에도 안 들어가면 그대로 둔다
+        const parts = /^(P|BLOCKQUOTE|H2|H3|ASIDE)$/.test(b.tagName) ? splitToFit(body, b, cap) : null;
+        if (parts) { body.appendChild(parts[0]); queue.unshift(parts[1]); placed = true; }
         else queue.unshift(b);
-        finish(p, H);
-        p = makePage(stage, pagesMeta.length);
+        return placed;
       }
-      if (p.body.children.length || !pagesMeta.length) finish(p, H); else p.wrap.remove();
-      // 제목을 첫 장에만 보이게 했다면 이후 장의 제목을 지운다 (makePage가 이미 처리)
-    }
+      return placed;
+    };
+
+    let guard = 0;
+    do {
+      const p = makePage(stage, pagesMeta.length);
+      let placedAny = false, maxBottom = 0;
+      state.boxes.forEach((bx, i) => {
+        const r = makeBox(p.page, bx, i);
+        p.bodies.push(r.body);
+        const inner = 2 * bx.pad + (bx.border === 'line' ? 2 * bx.borderWidth : 0);
+        const cap = bx.h > 0 ? bx.h - inner : fixedH ? fixedH - padB - bx.y - inner : Infinity;
+        if (fill(r.body, Math.max(20, cap))) placedAny = true;
+        maxBottom = Math.max(maxBottom, bx.y + r.el.offsetHeight);
+      });
+      // 어느 상자에도 한 줄도 안 들어가면 첫 상자에 억지로라도 넣어 무한 반복을 막는다
+      if (!placedAny && queue.length && p.bodies.length) { p.bodies[0].appendChild(queue.shift()); }
+      finish(p, fixedH || Math.max(state.page.minH, Math.ceil(maxBottom + padB)));
+    } while (queue.length && state.boxes.length && ++guard < 100);
+    if (!state.boxes.length) NT.toast('글 상자가 없어요. 왼쪽 ‘글 상자’ 도구로 그려 주세요.', 3500);
     drawStickers(srcs);
     drawOverlays();
     applyZoom();
@@ -458,6 +499,9 @@ NT.poster = (() => {
         const t = { v: 'deco', t: 'text', h: 'bg', i: 'insert' }[e.key.toLowerCase()];
         if (t) { e.preventDefault(); setTool(t); return; }
       }
+      if (document.body.dataset.mode === 'poster' && tool === 'text' && selBox && (e.key === 'Delete' || e.key === 'Backspace') && !e.target.closest('input, select, textarea, [contenteditable="true"]')) {
+        e.preventDefault(); stickerAction('box-del'); return;
+      }
       if (document.body.dataset.mode !== 'poster' || !selected || e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
       const s = state.stickers.find(x => x.id === selected);
       if (!s) return;
@@ -497,11 +541,20 @@ NT.poster = (() => {
     e.preventDefault();
     const H = pagesMeta[+pageEl.dataset.index].H, [px, py] = pagePoint(e, pageEl);
     if (tool === 'bg') return { area: 'bg', sx: e.clientX, sy: e.clientY, x0: state.bg.posX, y0: state.bg.posY, H };
-    const edge = e.target.classList.contains('tb') ? e.target.className.match(/tb-(\w)/)[1] : null;
-    const inside = e.target.closest('.pp-textbox em'); // 이름표를 끌면 이동, 나머지는 새로 그리기
-    const t = { ...state.text };
-    return { area: edge ? 'edge' : inside ? 'move' : 'draw', edge, pageEl, H, px, py, t0: t };
+    const boxEl = e.target.closest('.pp-box');
+    if (boxEl) {
+      const bx = boxById(boxEl.dataset.box);
+      selectBox(bx.id);
+      const edge = e.target.classList.contains('tb') ? e.target.className.match(/tb-(\w)/)[1] : null;
+      return { area: edge ? 'edge' : 'move', edge, bx, t0: { ...bx, h: bx.h || boxEl.offsetHeight }, autoH: !bx.h, pageEl, H, px, py };
+    }
+    selectBox(null);
+    const draft = document.createElement('div');
+    draft.className = 'pp-draft';
+    pageEl.appendChild(draft);
+    return { area: 'draw', pageEl, H, px, py, draft };
   }
+  function liveBox(bx) { $$(`.pp-box[data-box="${bx.id}"]`).forEach(el => boxStyle(el, bx)); }
   function moveAreaDrag(d, e) {
     if (d.area === 'bg') {
       const b = state.bg, W = state.page.w, H = d.H, k = scale();
@@ -515,57 +568,85 @@ NT.poster = (() => {
       repaintBg(); syncOutputs();
       return;
     }
-    const [px, py] = pagePoint(e, d.pageEl), t = state.text, t0 = d.t0, W = state.page.w;
-    const r = v => Math.round(v);
+    const [px, py] = pagePoint(e, d.pageEl), r = Math.round;
     if (d.area === 'draw') {
-      const x1 = Math.min(d.px, px), x2 = Math.max(d.px, px), y1 = Math.min(d.py, py), y2 = Math.max(d.py, py);
-      if (x2 - x1 < 20 || y2 - y1 < 20) return;
-      Object.assign(t, { x: r(Math.max(0, x1)), w: r(Math.min(W, x2) - Math.max(0, x1)), y: r(Math.max(0, y1)), bottom: r(Math.max(0, d.H - y2)) });
-    } else if (d.area === 'move') {
-      const dx = px - d.px, dy = py - d.py;
-      t.x = r(Math.max(0, Math.min(W - t0.w, t0.x + dx)));
-      t.y = r(Math.max(0, t0.y + dy));
-      t.bottom = r(Math.max(0, t0.bottom - dy));
-    } else {
-      if (d.edge === 'l') { const right = t0.x + t0.w; t.x = r(Math.max(0, Math.min(right - 60, px))); t.w = right - t.x; }
-      if (d.edge === 'r') t.w = r(Math.max(60, Math.min(W, px) - t0.x));
-      if (d.edge === 't') t.y = r(Math.max(0, Math.min(d.H - t0.bottom - 40, py)));
-      if (d.edge === 'b') t.bottom = r(Math.max(0, d.H - Math.max(py, t0.y + 40)));
+      const x1 = Math.min(d.px, px), y1 = Math.min(d.py, py);
+      d.rect = { x: r(x1), y: r(y1), w: r(Math.abs(px - d.px)), h: r(Math.abs(py - d.py)) };
+      Object.assign(d.draft.style, { left: d.rect.x + 'px', top: d.rect.y + 'px', width: d.rect.w + 'px', height: d.rect.h + 'px' });
+      return;
     }
-    placeTextboxes(); syncOutputs();
+    const bx = d.bx, t0 = d.t0, dx = px - d.px, dy = py - d.py;
+    if (d.area === 'move') { bx.x = r(t0.x + dx); bx.y = r(Math.max(0, t0.y + dy)); }
+    else {
+      if (d.edge === 'l') { const right = t0.x + t0.w; bx.x = r(Math.min(right - 40, t0.x + dx)); bx.w = right - bx.x; }
+      if (d.edge === 'r') bx.w = r(Math.max(40, t0.w + dx));
+      if (d.edge === 't') { bx.y = r(Math.max(0, Math.min(t0.y + t0.h - 40, t0.y + dy))); if (!d.autoH) bx.h = t0.y + t0.h - bx.y; }
+      if (d.edge === 'b') bx.h = r(Math.max(40, t0.h + dy));
+    }
+    liveBox(bx); syncBoxPanel();
   }
   function endAreaDrag(d) {
     if (d.area === 'bg') { changed(false); return; }
+    if (d.area === 'draw') {
+      d.draft.remove();
+      if (!d.rect || d.rect.w < 40 || d.rect.h < 30) return;
+      const bx = newBox(d.rect.x, d.rect.y, d.rect.w, d.rect.h);
+      state.boxes.push(bx);
+      selBox = bx.id;
+    }
+    syncBoxPanel();
     changed(true);
   }
-  function repaintBg() { pagesMeta.forEach(({ page, H }) => paintBg(page, H)); }
-  function placeTextboxes() {
-    const g = geom();
-    pagesMeta.forEach(({ page, H }) => {
-      const tb = page.querySelector('.pp-textbox');
-      Object.assign(tb.style, { left: g.left + 'px', top: g.top + 'px', width: g.width + 'px', height: Math.max(40, H - g.top - g.bottom) + 'px' });
-    });
+
+  /* ─ 글 상자 선택·목록 ─ */
+  function selectBox(id) {
+    selBox = id && boxById(id) ? id : null;
+    $$('.pp-box').forEach(el => el.classList.toggle('box-selected', el.dataset.box === selBox));
+    syncBoxPanel();
   }
+  function syncBoxPanel() {
+    const list = $('#pp-boxlist');
+    if (!list || !state) return;
+    list.innerHTML = state.boxes.map((b, i) => `<button class="pp-boxitem${b.id === selBox ? ' active' : ''}" data-selbox="${b.id}"><b>${i + 1}</b><span>${b.w} × ${b.h ? b.h : '자동'}</span><small>${b.bg === 'fill' ? '색 채움' : '글만'}</small></button>`).join('')
+      || '<p class="desc small">아직 글 상자가 없어요.</p>';
+    const bx = selBox && boxById(selBox);
+    $('#pp-box').hidden = !bx;
+    if (!bx) return;
+    $$('#pp-panel [data-k^="box."]').forEach(el => {
+      const v = bx[el.dataset.k.slice(4)];
+      if (el.type === 'checkbox') el.checked = !!v; else if (v != null) el.value = v;
+    });
+    const showIf = (id, on) => { const el = $('#pp-' + id); if (el) el.closest('label, .row').hidden = !on; };
+    showIf('box-fill', bx.bg === 'fill'); showIf('box-fillOpacity', bx.bg === 'fill');
+    showIf('box-borderColor', bx.border === 'line'); showIf('box-borderWidth', bx.border === 'line');
+    showIf('box-textColor', bx.useColor);
+    syncOutputs();
+  }
+
+  function repaintBg() { pagesMeta.forEach(({ page, H }) => paintBg(page, H)); }
   /* 문단 사이 '+ 이미지' 표시 */
   function drawOverlays() {
-    placeTextboxes();
-    pagesMeta.forEach(({ page, body }) => {
+    pagesMeta.forEach(({ page, bodies }, pi) => {
       const marks = page.querySelector('.pp-marks');
       marks.innerHTML = '';
-      const kids = Array.from(body.children);
-      const add = (y, after) => {
-        const m = document.createElement('button');
-        m.className = 'pp-mark'; m.dataset.after = after; m.textContent = '+ 여기에 이미지';
-        m.style.top = y + 'px'; m.style.left = body.offsetLeft + 'px'; m.style.width = body.offsetWidth + 'px';
-        marks.appendChild(m);
-      };
-      if (page.dataset.index === '0') add(body.offsetTop - 18, -1);
-      kids.forEach((k, i) => {
-        const next = kids[i + 1];
-        if (next && next.classList.contains('pp-cont')) return; // 이어지는 문단 중간에는 못 넣는다
-        if (!next && k.classList.contains('pp-split')) return;
-        const y = next ? body.offsetTop + (k.offsetTop + k.offsetHeight + next.offsetTop) / 2 : body.offsetTop + k.offsetTop + k.offsetHeight + 12;
-        add(y, +k.dataset.si);
+      bodies.forEach((body, bi) => {
+        const box = body.parentElement;
+        const ox = box.offsetLeft + body.offsetLeft, oy = box.offsetTop + body.offsetTop;
+        const add = (y, after) => {
+          const m = document.createElement('button');
+          m.className = 'pp-mark'; m.dataset.after = after; m.textContent = '+ 여기에 이미지';
+          m.style.top = y + 'px'; m.style.left = ox + 'px'; m.style.width = body.offsetWidth + 'px';
+          marks.appendChild(m);
+        };
+        const kids = Array.from(body.children);
+        if (pi === 0 && bi === 0) add(oy - 18, -1);
+        kids.forEach((k, i) => {
+          const next = kids[i + 1];
+          if (next && next.classList.contains('pp-cont')) return;
+          if (!next && k.classList.contains('pp-split')) return;
+          const y = next ? oy + (k.offsetTop + k.offsetHeight + next.offsetTop) / 2 : oy + k.offsetTop + k.offsetHeight + 12;
+          add(y, +k.dataset.si);
+        });
       });
     });
   }
@@ -605,12 +686,13 @@ NT.poster = (() => {
     $$('#pp-tools [data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
     const hints = {
       deco: '장식이나 본문 이미지를 눌러 선택하고, 끌어서 옮기세요.',
-      text: '페이지 위를 끌어서 글이 들어갈 사각형을 그리세요. 파란 손잡이로 크기를, 이름표를 끌어 위치를 바꿉니다.',
+      text: '빈 곳을 끌면 새 글 상자가 생겨요. 상자를 끌면 이동, 파란 손잡이로 크기 조절. 글은 1→2→3 순서로 흘러요. (Delete로 삭제)',
       bg: '배경 이미지를 끌어서 위치를 옮기고, 마우스 휠로 확대·축소하세요.',
       insert: "문단 사이의 '+ 여기에 이미지'를 눌러 이미지를 넣으세요."
     };
     $('#pp-hint').textContent = hints[t];
     if (t !== 'deco') { select(null); selectFig(null); }
+    if (t !== 'text') selectBox(null);
   }
 
   /* ─ 설정 패널 ─ */
@@ -628,7 +710,7 @@ NT.poster = (() => {
         <div class="pp-bg-drop" id="pp-bg-drop">
           <button class="btn primary small" id="pp-bg-btn">배경 이미지 올리기</button>
           <button class="btn small ghost" id="pp-bg-del">지우기</button>
-          <small>직접 꾸민 배경, 사진, 종이 스캔 모두 됩니다. 올린 뒤 위의 <b>글 영역</b> 도구로 글 들어갈 자리를 그리세요.</small>
+          <small>직접 꾸민 배경, 사진, 종이 스캔 모두 됩니다. 올린 뒤 왼쪽 <b>글 상자</b> 도구로 글 들어갈 자리를 그리세요.</small>
         </div>
         ${select_('bg.fit', '맞춤', opts({ cover: '꽉 채우기', width: '폭에 맞추기', contain: '전체 보이기', stretch: '늘여 채우기', tile: '바둑판 반복' }))}
         ${range('bg.zoom', '확대', 0.1, 4, 0.01, '×')}
@@ -644,13 +726,37 @@ NT.poster = (() => {
         ${select_('bg.texture', '종이 질감', opts(TEXTURES))}
         ${select_('bg.border', '테두리', opts({ none: '없음', woodcut: '목판화' }))}
       </details>
-      <details open><summary>글 영역</summary>
-        <p class="desc small">위 도구 줄에서 <b>글 영역</b>을 누르고 페이지 위를 끌면 사각형으로 지정돼요. 숫자로도 맞출 수 있어요.</p>
-        ${range('text.x', '왼쪽', 0, 1200, 1, 'px')}
-        ${range('text.y', '위', 0, 3000, 1, 'px')}
-        ${range('text.w', '폭', 60, 1280, 1, 'px')}
-        ${range('text.bottom', '아래 여백', 0, 3000, 1, 'px')}
-        <div class="pp-sel-actions"><button class="btn small" data-act="center-text">가운데로</button></div>
+      <details open><summary>글 상자</summary>
+        <p class="desc small">왼쪽 <b>글 상자</b> 도구로 빈 곳을 끌면 상자가 생겨요. 여러 개를 놓으면 글이 1번부터 차례로 흘러 넘어가고, 상자 없는 곳에는 배경이 그대로 보여요.</p>
+        <div class="pp-boxlist" id="pp-boxlist"></div>
+        <div class="pp-sel-actions"><button class="btn small" data-act="box-add">+ 상자 추가</button></div>
+        ${check('flowBreak', '구분선(---)이 나오면 다음 상자로 넘기기')}
+        ${range('page.padBottom', '마지막 상자 아래 여백', 0, 1000, 1, 'px')}
+        <div id="pp-box" hidden>
+          <h3>선택한 상자</h3>
+          ${range('box.x', '왼쪽', -200, 1280, 1, 'px')}
+          ${range('box.y', '위', 0, 5000, 1, 'px')}
+          ${range('box.w', '폭', 40, 1400, 1, 'px')}
+          ${range('box.h', '높이 (0 = 글 길이만큼)', 0, 5000, 1, 'px')}
+          ${select_('box.bg', '배경', opts({ none: '없음 (글만)', fill: '색 채우기' }))}
+          ${color('box.fill', '채울 색')}
+          ${range('box.fillOpacity', '채움 불투명도', 0, 1, 0.05)}
+          ${select_('box.border', '테두리', opts({ none: '없음', line: '선' }))}
+          ${color('box.borderColor', '선 색')}
+          ${range('box.borderWidth', '선 굵기', 0.5, 10, 0.5, 'px')}
+          ${range('box.radius', '모서리 둥글기', 0, 80, 1, 'px')}
+          ${range('box.pad', '안쪽 여백', 0, 150, 1, 'px')}
+          ${check('box.shadow', '그림자')}
+          ${check('box.useColor', '이 상자만 글자색 따로')}
+          ${color('box.textColor', '글자색')}
+          <div class="pp-sel-actions">
+            <button class="btn small" data-act="box-up">흐름 앞으로</button>
+            <button class="btn small" data-act="box-down">흐름 뒤로</button>
+            <button class="btn small" data-act="box-center">가운데로</button>
+            <button class="btn small" data-act="box-dup">복제</button>
+            <button class="btn small danger" data-act="box-del">삭제</button>
+          </div>
+        </div>
       </details>
       <details open><summary>본문 글자</summary>
         ${select_('body.font', '글꼴', fontOptions())}
@@ -740,6 +846,8 @@ NT.poster = (() => {
     P.addEventListener('input', onField);
     P.addEventListener('change', onField);
     P.addEventListener('click', e => {
+      const sb = e.target.closest('[data-selbox]');
+      if (sb) { if (tool !== 'text') setTool('text'); selectBox(sb.dataset.selbox); return; }
       const pre = e.target.closest('[data-preset]');
       if (pre) { applyPreset(pre.dataset.preset); return; }
       const add = e.target.closest('[data-add]');
@@ -782,7 +890,7 @@ NT.poster = (() => {
       syncPanel();
       changed();
       setTool('text');
-      NT.toast('배경을 넣었어요. 이제 페이지 위를 끌어서 글 영역을 그리세요.', 3500);
+      NT.toast('배경을 넣었어요. 이제 빈 곳을 끌어서 글 상자를 그리세요. 여러 개 그려도 돼요.', 3500);
     });
   }
 
@@ -797,6 +905,14 @@ NT.poster = (() => {
     }
     let v = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? parseFloat(el.value) : el.value;
     if (k === 'page.w' || k === 'page.h') v = parseInt(v, 10);
+    if (k.startsWith('box.')) {
+      const bx = selBox && boxById(selBox);
+      if (!bx) return;
+      bx[k.slice(4)] = v;
+      syncBoxPanel();
+      changed(true);
+      return;
+    }
     if (k.startsWith('st.')) {
       const s = state.stickers.find(x => x.id === selected);
       if (!s) return;
@@ -814,7 +930,8 @@ NT.poster = (() => {
   function syncOutputs() {
     $$('#pp-panel [data-o]').forEach(o => {
       const k = o.dataset.o;
-      const v = k.startsWith('st.') ? (state.stickers.find(x => x.id === selected) || {})[k.slice(3)] : get(state, k);
+      const v = k.startsWith('st.') ? (state.stickers.find(x => x.id === selected) || {})[k.slice(3)]
+        : k.startsWith('box.') ? ((selBox && boxById(selBox)) || {})[k.slice(4)] : get(state, k);
       if (v == null) return;
       o.textContent = (typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2).replace(/0$/, '') : v) + (o.dataset.unit || '');
     });
@@ -822,12 +939,13 @@ NT.poster = (() => {
   function syncPanel() {
     $$('#pp-panel [data-k]').forEach(el => {
       const k = el.dataset.k;
-      if (k.startsWith('st.')) return;
+      if (k.startsWith('st.') || k.startsWith('box.')) return;
       const v = get(state, k);
       if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
     });
     syncOutputs();
     syncStickerPanel();
+    syncBoxPanel();
   }
   function syncStickerPanel() {
     const s = state && state.stickers.find(x => x.id === selected);
@@ -846,10 +964,12 @@ NT.poster = (() => {
   function applyPreset(id) {
     const keepUploads = state ? state.stickers.filter(s => s.kind === 'upload') : [];
     const keepBg = state && state.bg.image ? state.bg : null;
+    const prevBoxes = state && state.boxes ? state.boxes : null; // 직접 그린 글 상자는 배경과 함께 유지
     state = normalize({ preset: id, ...PRESETS[id].make() });
     state.stickers.push(...keepUploads);
+    if (keepBg && prevBoxes) state.boxes = prevBoxes;
     if (keepBg) Object.assign(state.bg, { image: keepBg.image, iw: keepBg.iw, ih: keepBg.ih, fit: keepBg.fit, posX: keepBg.posX, posY: keepBg.posY, zoom: keepBg.zoom });
-    select(null);
+    select(null); selBox = null;
     syncPanel();
     $$('.pp-preset').forEach(b => b.classList.toggle('active', b.dataset.preset === id));
     changed();
@@ -865,10 +985,28 @@ NT.poster = (() => {
   }
 
   function stickerAction(act) {
-    if (act === 'center-text') { state.text.x = Math.round((state.page.w - state.text.w) / 2); syncPanel(); changed(); return; }
+    if (act.startsWith('box-')) {
+      const W = state.page.w;
+      if (act === 'box-add') {
+        const last = state.boxes[state.boxes.length - 1];
+        const y = last ? last.y + (last.h || 400) + 60 : 200;
+        const bx = newBox(Math.round(W * 0.15), y, Math.round(W * 0.7), 500);
+        state.boxes.push(bx); selBox = bx.id; setTool('text');
+      }
+      const i = state.boxes.findIndex(b => b.id === selBox), bx = state.boxes[i];
+      if (bx) {
+        if (act === 'box-del') { state.boxes.splice(i, 1); selBox = null; }
+        if (act === 'box-up' && i > 0) { state.boxes.splice(i, 1); state.boxes.splice(i - 1, 0, bx); }
+        if (act === 'box-down' && i < state.boxes.length - 1) { state.boxes.splice(i, 1); state.boxes.splice(i + 1, 0, bx); }
+        if (act === 'box-center') bx.x = Math.round((W - bx.w) / 2);
+        if (act === 'box-dup') { const c = { ...bx, id: NT.uid(), y: bx.y + (bx.h || 300) + 40 }; state.boxes.splice(i + 1, 0, c); selBox = c.id; }
+      }
+      syncBoxPanel(); changed(); return;
+    }
     if (act === 'frame-to-text') {
-      const g = geom(), pad = 50;
-      Object.assign(state.frame, { x: Math.max(0, g.left - pad), top: Math.max(0, g.top - pad), bottom: Math.max(0, g.bottom - pad), style: state.frame.style === 'none' ? 'single' : state.frame.style });
+      if (!state.boxes.length) return;
+      const pad = 50, x = Math.min(...state.boxes.map(b => b.x)), y = Math.min(...state.boxes.map(b => b.y));
+      Object.assign(state.frame, { x: Math.max(0, x - pad), top: Math.max(0, y - pad), bottom: Math.max(0, state.page.padBottom - pad), style: state.frame.style === 'none' ? 'single' : state.frame.style });
       syncPanel(); changed(); return;
     }
     if (act.startsWith('fig-') && selFig != null) {
@@ -942,7 +1080,7 @@ NT.poster = (() => {
     },
     set(p) {
       state = normalize(p && p.stickers ? JSON.parse(JSON.stringify(p)) : { preset: 'blank', ...PRESETS.blank.make() });
-      selected = null; selFig = null;
+      selected = null; selFig = null; selBox = null;
       if ($('#pp-panel').children.length) {
         syncPanel();
         $$('.pp-preset').forEach(b => b.classList.toggle('active', b.dataset.preset === state.preset));
