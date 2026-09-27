@@ -22,6 +22,9 @@
 <p>1:1, 4:5, 9:16 비율을 고르고 PNG로 저장할 수 있어요.</p>
 `;
 
+  /* ─ 글 이미지 ─ */
+  NT.poster.init({ editor: editorEl, title: () => titleEl.value.trim(), onChange: () => markDirty() });
+
   /* ─ 편집기 ─ */
   const editor = new NT.Editor(editorEl, {
     onChange: () => { markDirty(); analyzeSoon(); },
@@ -36,6 +39,7 @@
     doc.html = editor.html;
     doc.title = titleEl.value.trim();
     doc.design = NT.design.get();
+    doc.poster = NT.poster.get();
     const ok = NT.store.save(doc);
     saveState.textContent = ok ? '저장됨' : (NT.store.isPersistent ? '저장 실패' : '임시 저장(이 탭에서만)');
     renderDocList();
@@ -51,9 +55,11 @@
     doc = d;
     titleEl.value = d.title || '';
     NT.design.set(d.design);
+    NT.poster.set(d.poster);
     editor.html = d.html;
     save();
     if (mode === 'cards') renderCards();
+    if (mode === 'poster') NT.poster.render();
     runAnalysis();
     document.title = (d.title ? d.title + ' — ' : '') + '나비텍스트';
   }
@@ -102,10 +108,12 @@
     document.body.dataset.mode = m;
     $$('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     editorEl.contentEditable = m === 'edit' ? 'true' : 'false';
-    $('#page-wrap').hidden = m === 'cards';
+    $('#page-wrap').hidden = m === 'cards' || m === 'poster';
     $('#cards-wrap').hidden = m !== 'cards';
+    $('#poster-wrap').hidden = m !== 'poster';
     editor.hideBubble(); editor.closeSlash();
     if (m === 'cards') renderCards();
+    if (m === 'poster') NT.poster.render();
   }
   $$('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 

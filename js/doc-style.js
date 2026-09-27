@@ -4,7 +4,7 @@ window.NT = window.NT || {};
 
 NT.FONT_LINKS = [
   'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css',
-  'https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Nanum+Myeongjo:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;600;700&family=Nanum+Pen+Script&family=Black+Han+Sans&family=Do+Hyeon&family=Song+Myung&display=swap'
+  'https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Nanum+Myeongjo:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;600;700&family=Nanum+Pen+Script&family=Black+Han+Sans&family=Do+Hyeon&family=Song+Myung&family=Hahmlet:wght@400;600;700&family=Diphylleia&family=Gasoek+One&family=Bagel+Fat+One&display=swap'
 ];
 
 NT.DOC_CSS = `
