@@ -95,8 +95,15 @@
     <div class="poster-wrap" id="poster-wrap" hidden>
       <div class="pp-main">
         <div class="pp-toolbar">
+          <div class="seg small" id="pp-tools" role="toolbar" aria-label="편집 도구">
+            <button class="seg-btn active" data-tool="deco">선택·옮기기</button>
+            <button class="seg-btn" data-tool="text">글 영역</button>
+            <button class="seg-btn" data-tool="bg">배경 옮기기</button>
+            <button class="seg-btn" data-tool="insert">이미지 넣기</button>
+          </div>
           <label>보기 <select id="pp-zoom"><option value="fit">화면에 맞춤</option><option value="0.5">50%</option><option value="1">100%</option></select></label>
           <span class="hint" id="pp-info"></span>
+          <span class="pp-hint" id="pp-hint"></span>
           <div class="spacer"></div>
           <label>해상도 <select id="pp-ratio"><option value="1">원본 크기</option><option value="2">2배 (선명하게)</option></select></label>
           <button class="btn primary" id="pp-export">PNG로 저장</button>
@@ -213,6 +220,7 @@
 <input type="file" id="file-image" accept="image/*" hidden>
 <input type="file" id="pp-file" accept="image/*" hidden>
 <input type="file" id="pp-bgfile" accept="image/*" hidden>
+<input type="file" id="pp-figfile" accept="image/*" hidden>
 
 <script src="vendor/html-to-image.js"></script>
 <script src="js/doc-style.js"></script>

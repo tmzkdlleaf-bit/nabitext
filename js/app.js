@@ -23,7 +23,7 @@
 `;
 
   /* ─ 글 이미지 ─ */
-  NT.poster.init({ editor: editorEl, title: () => titleEl.value.trim(), onChange: () => markDirty() });
+  NT.poster.init({ editor: editorEl, title: () => titleEl.value.trim(), onChange: () => markDirty(), onDocChange: () => editor.changed(true) });
 
   /* ─ 편집기 ─ */
   const editor = new NT.Editor(editorEl, {
