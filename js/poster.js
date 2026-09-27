@@ -453,6 +453,11 @@ NT.poster = (() => {
     });
     window.addEventListener('resize', () => { if (document.body.dataset.mode === 'poster') applyZoom(); });
     document.addEventListener('keydown', e => {
+      // 도구 단축키: V 선택, T 글 영역, H 배경, I 이미지
+      if (document.body.dataset.mode === 'poster' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest('input, select, textarea, [contenteditable="true"]')) {
+        const t = { v: 'deco', t: 'text', h: 'bg', i: 'insert' }[e.key.toLowerCase()];
+        if (t) { e.preventDefault(); setTool(t); return; }
+      }
       if (document.body.dataset.mode !== 'poster' || !selected || e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
       const s = state.stickers.find(x => x.id === selected);
       if (!s) return;

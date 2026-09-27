@@ -20,6 +20,14 @@
 | **내보내기** | 서식 포함 복사(블로그·메일에 붙여넣기용 인라인 스타일) · HTML · Markdown · TXT · PDF 인쇄 · `.md/.txt/.html` 불러오기 |
 | **저장** | 브라우저에 자동 저장, 여러 문서 관리 |
 
+## 사이트 주소
+
+**https://tmzkdlleaf-bit.github.io/nabitext/** (GitHub Pages)
+
+처음 한 번만 저장소 **Settings → Pages**에서 *Build and deployment*의 Source를 **Deploy from a branch**로,
+Branch를 **claude/loving-goldberg-i2hquj**, 폴더를 **/ (root)**로 고르고 Save를 누르면 1~2분 뒤 열립니다.
+이후에는 이 브랜치에 푸시할 때마다 사이트가 자동으로 갱신됩니다.
+
 ## 실행
 
 ```bash

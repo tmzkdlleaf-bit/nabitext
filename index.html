@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>나비텍스트</title>
+<meta name="description" content="글을 쓰고 다듬고, 배경 이미지 위에 조판해 글 이미지·카드뉴스로 내보내는 한국어 글 편집기">
+<meta name="theme-color" content="#3d5ce0">
+<meta property="og:title" content="나비텍스트">
+<meta property="og:description" content="글을 쓰고 다듬고, 보기 좋은 글 이미지로 만드는 편집기">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -15,41 +20,48 @@
 
   <!-- 상단 바 -->
   <header class="topbar">
-    <button class="icon-btn" id="btn-docs" title="문서 목록 (Ctrl+Shift+O)" aria-label="문서 목록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
-    <div class="brand"><span class="brand-mark">◆</span> 나비텍스트</div>
-    <input class="doc-title" id="doc-title" placeholder="제목 없는 문서" aria-label="문서 제목">
-    <span class="save-state" id="save-state">저장됨</span>
-    <div class="spacer"></div>
-    <div class="seg" role="tablist" aria-label="보기 모드">
-      <button class="seg-btn active" data-mode="edit">편집</button>
-      <button class="seg-btn" data-mode="read">미리보기</button>
-      <button class="seg-btn" data-mode="poster">글 이미지</button>
-      <button class="seg-btn" data-mode="cards">카드뉴스</button>
+    <div class="tb-left">
+      <button class="icon-btn" id="btn-docs" title="문서 목록 (Ctrl+Shift+O)" aria-label="문서 목록"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+      <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--primary)"/><path d="M16 11.5c-1.6-3.6-6.8-5-8.2-2.4-1.3 2.4.9 6.3 5.6 6.6-3.4.9-5 3.6-3.5 5.3 1.6 1.8 4.8-.6 6.1-3.8 1.3 3.2 4.5 5.6 6.1 3.8 1.5-1.7-.1-4.4-3.5-5.3 4.7-.3 6.9-4.2 5.6-6.6-1.4-2.6-6.6-1.2-8.2 2.4z" fill="#fff"/><path d="M16 10v13" stroke="var(--primary)" stroke-width="1.6" stroke-linecap="round"/></svg><span>나비텍스트</span></div>
+      <span class="tb-sep"></span>
+      <input class="doc-title" id="doc-title" placeholder="제목 없는 문서" aria-label="문서 제목">
+      <span class="save-state" id="save-state">저장됨</span>
     </div>
-    <button class="icon-btn" id="btn-undo" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-    <button class="icon-btn" id="btn-redo" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
-    <button class="icon-btn" id="btn-focus" title="포커스 모드 (Ctrl+.)" aria-label="포커스 모드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg></button>
-    <button class="icon-btn" id="btn-ui-theme" title="화면 밝기 전환" aria-label="화면 밝기 전환"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button>
-    <div class="menu-wrap">
-      <button class="btn primary" id="btn-export" aria-label="내보내기"><span class="label">내보내기 ▾</span><svg class="only-narrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>
-      <div class="dropdown" id="export-menu" hidden>
-        <button data-export="copy-rich">서식 포함 복사 <small>블로그·메일에 붙여넣기</small></button>
-        <button data-export="html">HTML 파일</button>
-        <button data-export="md">Markdown 파일</button>
-        <button data-export="txt">텍스트 파일</button>
-        <button data-export="pdf">PDF로 인쇄</button>
-        <hr>
-        <button data-export="open">파일 열기… <small>.md .txt .html</small></button>
+    <nav class="modes" role="tablist" aria-label="작업 모드">
+      <button class="mode-btn active" data-mode="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>편집</span></button>
+      <button class="mode-btn" data-mode="read"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg><span>미리보기</span></button>
+      <button class="mode-btn" data-mode="poster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg><span>글 이미지</span></button>
+      <button class="mode-btn" data-mode="cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>카드뉴스</span></button>
+    </nav>
+    <div class="tb-right">
+      <button class="icon-btn" id="btn-undo" title="실행 취소 (Ctrl+Z)" aria-label="실행 취소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="icon-btn" id="btn-redo" title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+      <button class="icon-btn" id="btn-focus" title="포커스 모드 (Ctrl+.)" aria-label="포커스 모드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg></button>
+      <button class="icon-btn" id="btn-ui-theme" title="밝은/어두운 화면" aria-label="밝은/어두운 화면"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/></svg></button>
+      <button class="icon-btn" id="btn-panel" title="오른쪽 패널" aria-label="오른쪽 패널 열기/닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+      <span class="tb-sep"></span>
+      <div class="menu-wrap">
+        <button class="btn primary" id="btn-export" aria-label="내보내기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span class="label">내보내기</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="chev"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="dropdown" id="export-menu" hidden>
+          <div class="dd-label">복사</div>
+          <button data-export="copy-rich">서식 포함 복사 <small>블로그·메일 편집기에 붙여넣기</small></button>
+          <div class="dd-label">파일로 저장</div>
+          <button data-export="html">HTML <small>웹페이지 한 장</small></button>
+          <button data-export="md">Markdown</button>
+          <button data-export="txt">텍스트</button>
+          <button data-export="pdf">PDF로 인쇄</button>
+          <hr>
+          <button data-export="open">파일 열기… <small>.md · .txt · .html</small></button>
+        </div>
       </div>
     </div>
-    <button class="icon-btn" id="btn-panel" title="디자인 패널" aria-label="디자인 패널 열기/닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
   </header>
 
   <!-- 문서 목록 -->
   <aside class="sidebar" id="sidebar" hidden>
     <div class="sidebar-head">
-      <strong>문서</strong>
-      <button class="btn small" id="btn-new">+ 새 문서</button>
+      <strong>내 문서</strong>
+      <button class="btn small" id="btn-new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>새 문서</button>
     </div>
     <ul class="doc-list" id="doc-list"></ul>
   </aside>
@@ -88,25 +100,25 @@
         <label class="check"><input type="checkbox" id="card-num" checked> 쪽 번호</label>
         <span class="hint">구분선(—)으로 카드를 나눕니다</span>
         <div class="spacer"></div>
-        <button class="btn primary" id="btn-cards-png">모두 PNG로 저장</button>
+        <button class="btn primary" id="btn-cards-png"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>모두 PNG 저장</button>
       </div>
       <div class="cards" id="cards"></div>
     </div>
     <div class="poster-wrap" id="poster-wrap" hidden>
+      <div class="pp-rail" id="pp-tools" role="toolbar" aria-label="편집 도구" aria-orientation="vertical">
+        <button class="rail-btn active" data-tool="deco" title="선택·옮기기 (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l6.5 17 2.3-7.2L21 10.5z"/></svg><span>선택</span></button>
+        <button class="rail-btn" data-tool="text" title="글 영역 그리기 (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke-dasharray="3 2.5"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg><span>글 영역</span></button>
+        <button class="rail-btn" data-tool="bg" title="배경 옮기기 (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg><span>배경</span></button>
+        <button class="rail-btn" data-tool="insert" title="문단 사이 이미지 (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M16 5h6M19 2v6"/><path d="m21 15-5-5L5 21"/><circle cx="9" cy="9" r="2"/></svg><span>이미지</span></button>
+      </div>
       <div class="pp-main">
         <div class="pp-toolbar">
-          <div class="seg small" id="pp-tools" role="toolbar" aria-label="편집 도구">
-            <button class="seg-btn active" data-tool="deco">선택·옮기기</button>
-            <button class="seg-btn" data-tool="text">글 영역</button>
-            <button class="seg-btn" data-tool="bg">배경 옮기기</button>
-            <button class="seg-btn" data-tool="insert">이미지 넣기</button>
-          </div>
-          <label>보기 <select id="pp-zoom"><option value="fit">화면에 맞춤</option><option value="0.5">50%</option><option value="1">100%</option></select></label>
-          <span class="hint" id="pp-info"></span>
           <span class="pp-hint" id="pp-hint"></span>
           <div class="spacer"></div>
-          <label>해상도 <select id="pp-ratio"><option value="1">원본 크기</option><option value="2">2배 (선명하게)</option></select></label>
-          <button class="btn primary" id="pp-export">PNG로 저장</button>
+          <span class="pp-info" id="pp-info"></span>
+          <select id="pp-zoom" aria-label="보기 배율"><option value="fit">화면에 맞춤</option><option value="0.5">50%</option><option value="1">100%</option></select>
+          <select id="pp-ratio" aria-label="저장 해상도"><option value="1">원본 크기</option><option value="2">2배 선명하게</option></select>
+          <button class="btn primary" id="pp-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>PNG 저장</button>
         </div>
         <div class="pp-stage" id="pp-stage"></div>
       </div>
