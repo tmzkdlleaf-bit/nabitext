@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>레이아웃 엔진 프로토타입</title>
+<script type="importmap">
+{ "imports": {
+  "orderedmap": "./vendor/orderedmap.js",
+  "prosemirror-model": "./vendor/prosemirror-model.js",
+  "prosemirror-transform": "./vendor/prosemirror-transform.js",
+  "prosemirror-state": "./vendor/prosemirror-state.js",
+  "prosemirror-commands": "./vendor/prosemirror-commands.js",
+  "pdf-lib": "./vendor/pdf-lib.js",
+  "fflate": "./vendor/fflate.js"
+} }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- crossorigin: 출력할 때 @font-face 규칙을 읽어 글꼴 파일을 넣기 위해 필요 -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+  body { margin: 0; padding: 20px; font: 14px/1.5 system-ui, "Noto Sans KR", sans-serif; background: #e9e7e3; color: #222; }
+  header { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-bottom: 16px; }
+  header h1 { font-size: 17px; margin: 0 12px 0 0; }
+  label { display: flex; gap: 6px; align-items: center; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(580px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 10px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 14px; margin: 0 0 8px; }
+  .frame { outline: 1px solid #ddd; }
+  .stat { margin: 6px 0 0; color: #666; font-size: 12px; }
+  #report { white-space: pre; font: 12px ui-monospace, monospace; background: #fff; padding: 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>레이아웃 엔진 · 5단계 (Electron)</h1>
+  <button id="undo" title="되돌리기 (Ctrl+Z)">되돌리기</button>
+  <button id="redo" title="다시 실행 (Ctrl+Shift+Z)">다시 실행</button>
+  <label><input type="checkbox" id="debug"> 영역·줄 표시</label>
+  <label>여백 <input type="range" id="offset" min="0" max="30" value="10"> <b id="offsetV"></b>px</label>
+  <label>외곽 다듬기 <input type="range" id="smooth" min="0" max="10" value="2"> <b id="smoothV"></b>px</label>
+  <label>글자 크기 <input type="range" id="size" min="11" max="28" value="16"> <b id="sizeV"></b>px</label>
+  <button id="verify">검증 실행</button>
+</header>
+<header>
+  <b>출력</b>
+  <label>형식 <select id="exFormat"><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WebP</option><option value="pdf">PDF (래스터)</option><option value="vector">PDF (벡터·인쇄)</option></select></label>
+  <label>배율 <select id="exScale"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>x</label>
+  <label><input type="checkbox" id="exTransparent"> 투명 배경</label>
+  <label>범위 <select id="exRange"><option value="all">전체</option><option value="current">현재 장</option><option value="selected">선택한 장</option></select></label>
+  <button id="exRun">내보내기</button>
+  <span id="exStatus" class="stat"></span>
+  <button id="sysFonts">시스템 글꼴 불러오기</button>
+  <select id="sysFontPick"><option value="">글꼴 선택</option></select>
+  <span id="sysFontStatus" class="stat"></span>
+</header>
+<div id="grid"></div>
+<pre id="report"></pre>
+<script type="module" src="demo/main.js"></script>
+</body>
+</html>

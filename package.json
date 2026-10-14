@@ -1,0 +1,122 @@
+{
+  "name": "nabitext",
+  "productName": "나비글쓰기",
+  "version": "0.13.0",
+  "description": "글과 이미지를 결합한 이미지 제작 편집기",
+  "author": "Nabi",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "python3 -m http.server 8000",
+    "build:web": "node scripts/build-web.mjs",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "dist:dir": "electron-builder --dir",
+    "dist:store": "electron-builder --win appx"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "Nabitext",
+    "productName": "나비글쓰기",
+    "artifactName": "Nabitext-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "index.html",
+      "demo.html",
+      "res/**",
+      "app/**",
+      "src/**",
+      "vendor/**",
+      "demo/**",
+      "package.json"
+    ],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "나비글쓰기",
+      "uninstallDisplayName": "나비글쓰기"
+    },
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true
+    },
+    "linux": {
+      "category": "Graphics",
+      "target": [
+        "AppImage"
+      ],
+      "maintainer": "Nabi"
+    },
+    "publish": null,
+    "executableName": "Nabitext",
+    "fileAssociations": [
+      {
+        "ext": "nabi",
+        "name": "나비글쓰기 프로젝트",
+        "description": "나비글쓰기 프로젝트",
+        "role": "Editor",
+        "mimeType": "application/x-nabitext"
+      }
+    ],
+    "appx": {
+      "applicationId": "Nabitext",
+      "displayName": "나비글쓰기",
+      "languages": [
+        "ko-KR"
+      ],
+      "backgroundColor": "#fbfaf8",
+      "showNameOnTiles": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

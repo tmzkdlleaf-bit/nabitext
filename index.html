@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>나비글쓰기</title>
+<link rel="icon" href="res/icon.svg" type="image/svg+xml">
+<script type="importmap">
+{ "imports": {
+  "orderedmap": "./vendor/orderedmap.js",
+  "prosemirror-model": "./vendor/prosemirror-model.js",
+  "prosemirror-transform": "./vendor/prosemirror-transform.js",
+  "prosemirror-state": "./vendor/prosemirror-state.js",
+  "prosemirror-commands": "./vendor/prosemirror-commands.js",
+  "pdf-lib": "./vendor/pdf-lib.js",
+  "fflate": "./vendor/fflate.js"
+} }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+  /* 화면 구성(12단계 개편): 위 막대 · 왼쪽 도구 줄 · 장/레이어 탭 · 캔버스 · 속성 패널 · 상태 줄 */
+  :root { --bg: #f4f3f0; --panel: #fbfaf8; --line: #e4e1dc; --line2: #ecebe7; --text: #23211e; --muted: #8a857d; --accent: #2d6cdf; --accent-bg: #e7effd; --r: 6px; }
+  html, body { margin: 0; height: 100%; }
+  body { display: flex; flex-direction: column; font: 13px/1.4 system-ui, "Noto Sans KR", "Noto Sans CJK KR", sans-serif; color: var(--text); background: var(--bg); }
+  button { font: inherit; color: inherit; }
+  .ic { display: block; flex: none; }
+  kbd { font: 11px system-ui; color: var(--muted); }
+  /* 위 막대 */
+  #top { height: 46px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: #fff; border-bottom: 1px solid var(--line); }
+  #top .grow { flex: 1; }
+  .ib { width: 32px; height: 30px; display: grid; place-items: center; border: 0; background: none; border-radius: var(--r); cursor: pointer; color: #4a4640; }
+  .ib:hover { background: var(--bg); }
+  .ib:disabled { opacity: .35; cursor: default; background: none; }
+  .grp { display: flex; background: var(--bg); border-radius: 8px; padding: 2px; }
+  .grp .ib[aria-pressed="true"] { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  #projName { font-weight: 600; font-size: 14px; max-width: 260px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #dirtyTag { font-size: 11.5px; color: #b26b00; background: #fff4e0; padding: 1px 7px; border-radius: 10px; }
+  #dirtyTag[hidden] { display: none; }
+  .primary { background: var(--accent); color: #fff; border: 0; border-radius: 7px; height: 32px; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+  .primary:hover { background: #2560c9; }
+  .wrap { position: relative; }
+  .menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 60; min-width: 250px; background: #fff; border-radius: 8px; padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.16), 0 0 0 1px rgba(0,0,0,.06); }
+  .menu[hidden], .pop[hidden] { display: none; }
+  .menu button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 16px; white-space: nowrap; border: 0; background: none; padding: 6px 10px; border-radius: 5px; cursor: pointer; text-align: left; }
+  .menu button:hover { background: var(--accent-bg); }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+  .pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: 290px; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); }
+  .pop h3 { margin: 0 0 12px; font-size: 14px; }
+  .pop .prow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .pop .prow > span { width: 36px; color: var(--muted); font-size: 12px; }
+  .pop select { flex: 1; height: 32px; font: inherit; border: 1px solid var(--line); border-radius: var(--r); padding: 0 6px; background: #fff; }
+  .pop .note { font-size: 11.5px; color: var(--muted); margin: 0 0 10px 44px; }
+  .pop label.chk { display: flex; align-items: center; gap: 8px; margin: 0 0 12px 44px; font-size: 12.5px; }
+  .pop .primary { width: 100%; justify-content: center; height: 36px; }
+  /* 본문 */
+  #main { flex: 1; display: flex; min-height: 0; }
+  /* 도구 막대: 위(위 막대 가운데) / 왼쪽·오른쪽(세로 줄). 화면 배치 설정(app/layout-ui.js)이 body 클래스로 고른다 */
+  #toolSlot { display: flex; }
+  #rail { flex: none; display: flex; align-items: center; gap: 4px; }
+  .tools-left #rail, .tools-right #rail { width: 52px; background: var(--panel); flex-direction: column; padding: 10px 0; }
+  .tools-left #rail { order: 0; border-right: 1px solid var(--line); }
+  .tools-right #rail { order: 9; border-left: 1px solid var(--line); }
+  .tools-top #rail { flex-direction: row; gap: 2px; background: var(--bg); border-radius: 9px; padding: 2px; }
+  #rail > button, #rail .wrap > button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: none; border-radius: 8px; cursor: pointer; color: #3d3a35; position: relative; }
+  .tools-top #rail > button, .tools-top #rail .wrap > button { width: 38px; height: 34px; border-radius: 7px; }
+  #rail button:hover { background: var(--bg); }
+  .tools-top #rail button:hover { background: #fff; }
+  #rail button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  #rail .more { position: absolute; right: 3px; bottom: 3px; width: 0; height: 0; border-left: 4px solid transparent; border-bottom: 4px solid #9a948b; }
+  #rail button[aria-pressed="true"] .more { border-bottom-color: #cfe0ff; }
+  #rail .hsep { width: 26px; height: 1px; background: var(--line); margin: 6px 0; }
+  .tools-top #rail .hsep { width: 1px; height: 22px; margin: 0 4px; background: #dcd8d1; }
+  #shapeMenu { min-width: 160px; }
+  .tools-left #shapeMenu { left: calc(100% + 6px); top: 0; }
+  .tools-right #shapeMenu { left: auto; right: calc(100% + 6px); top: 0; }
+  .tools-top #shapeMenu { left: 0; top: calc(100% + 6px); }
+  #shapeMenu button { justify-content: flex-start; gap: 8px; }
+  #shapeMenu kbd { margin-left: auto; }
+  #shapeMenu button[aria-pressed="true"] { background: var(--accent-bg); color: var(--accent); }
+  /* 패널 순서: [도구] 장·레이어 | 손잡이 | 캔버스 | 손잡이 | 속성 [도구]. 좌우 바꾸기(swap)는 순서만 바꾼다 */
+  #left { order: 1; } .split[data-edge="l"] { order: 2; } #canvas { order: 3; } .split[data-edge="r"] { order: 4; } #props { order: 5; }
+  .swap #left { order: 5; border-right: 0; border-left: 1px solid var(--line); }
+  .swap #props { order: 1; border-left: 0; border-right: 1px solid var(--line); }
+  .split { flex: none; width: 7px; margin: 0 -3px; position: relative; z-index: 5; cursor: col-resize; }
+  .split:hover, .resizing .split:hover { background: rgba(45,108,223,.25); }
+  .resizing, .resizing * { cursor: col-resize !important; user-select: none; }
+  .hide-left #left, .hide-right #props, .hide-status #statusbar { display: none !important; }
+  .hide-left:not(.swap) .split[data-edge="l"], .hide-left.swap .split[data-edge="r"],
+  .hide-right:not(.swap) .split[data-edge="r"], .hide-right.swap .split[data-edge="l"] { display: none; }
+  #main > aside { flex: none; background: var(--panel); contain: strict; box-sizing: border-box; }
+  /* 패널을 격리: 패널 DOM이 바뀌어도 캔버스 쪽을 다시 배치하지 않는다.
+     캔버스 쪽에는 걸지 않는다(합성 레이어가 소수 px 위치에 생기면 글자 기준선 반올림이 출력과 달라짐 — 10단계 참고) */
+  #left { width: 236px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .tabs { display: flex; margin: 10px 10px 8px; background: var(--bg); border-radius: 8px; padding: 2px; flex: none; }
+  .tabs button { flex: 1; height: 28px; border: 0; background: none; border-radius: 6px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .tabpane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .tabpane[hidden] { display: none; }
+  #pagesList { flex: 1; overflow: auto; padding: 0 10px; }
+  #layers { overflow: auto; }
+  .lfoot { display: flex; gap: 5px; padding: 10px 8px; border-top: 1px solid var(--line); flex: none; }
+  .btn { height: 30px; padding: 0 10px; white-space: nowrap; border: 1px solid var(--line); background: #fff; border-radius: var(--r); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { border-color: #cfcac2; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .lfoot .btn.grow { flex: 1; padding: 0 6px; }
+  .lfoot .btn.sq { width: 30px; padding: 0; }
+  #canvas { flex: 1; position: relative; min-height: 0; min-width: 0; }
+  #canvas > .pv-viewport { position: absolute; inset: 0; }
+  #props { width: 292px; border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+  #propsBody { flex: 1; overflow: auto; }
+  .pp-foot { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .pp-foot .btn { height: 26px; font-size: 12px; padding: 0 8px; }
+  /* 상태 줄 */
+  #statusbar { height: 28px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12px; color: #6d675e; }
+  #statusbar .grow { flex: 1; }
+  #pageInfo { color: var(--text); }
+  .zoom { display: flex; align-items: center; gap: 2px; }
+  .zoom button { min-width: 24px; height: 22px; border: 0; background: none; border-radius: 5px; cursor: pointer; color: #4a4640; }
+  .zoom button:hover { background: var(--bg); }
+  #zoomLabel { min-width: 48px; font-weight: 600; color: var(--text); }
+  .zoom .fit { background: var(--bg); padding: 0 8px; }
+  #imgFile, #fontFile { display: none; }
+  .upd-toast { position: fixed; right: 16px; bottom: 36px; z-index: 50; background: #fff; border: 1px solid #cfccc6; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.16); padding: 10px 12px; font-size: 12px; display: flex; gap: 8px; align-items: center; max-width: 440px; }
+  .upd-toast button { font: inherit; padding: 3px 8px; border: 1px solid #cfccc6; background: #fff; border-radius: 3px; cursor: pointer; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.28); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+  .modal { background: #fff; border-radius: 10px; padding: 18px 20px 14px; min-width: 300px; max-width: 440px; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+  .modal p { margin: 0 0 14px; white-space: pre-line; line-height: 1.6; }
+  .modal-btns { display: flex; gap: 6px; justify-content: flex-end; }
+  .modal-btns button { font: inherit; padding: 5px 12px; border: 1px solid #cfccc6; background: #fff; border-radius: 6px; cursor: pointer; }
+  .modal-btns button:first-child { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal.tpl { max-width: 720px; width: 720px; }
+  .tpl-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 60vh; overflow: auto; margin-bottom: 12px; }
+  .tpl-item { border: 1px solid #e0ddd7; border-radius: 6px; padding: 6px; font-size: 12px; }
+  .tpl-thumb { height: 110px; display: flex; align-items: center; justify-content: center; background: #f1efeb; border-radius: 4px; overflow: hidden; color: #888; }
+  .tpl-thumb img { max-width: 100%; max-height: 100%; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .tpl-name { font-weight: 600; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tpl-size { color: #888; }
+  .tpl-acts { display: flex; gap: 4px; margin-top: 5px; }
+  .tpl-acts button { font: inherit; font-size: 11px; padding: 2px 6px; border: 1px solid #cfccc6; background: #fff; border-radius: 3px; cursor: pointer; }
+  .tpl-empty { grid-column: 1 / -1; color: #777; line-height: 1.7; padding: 16px 4px; }
+  .modal-input { width: 100%; box-sizing: border-box; font: inherit; padding: 5px 7px; border: 1px solid #cfccc6; border-radius: 4px; margin: 0 0 12px; }
+</style>
+</head>
+<body class="tools-top">
+<header id="top">
+  <div class="wrap" id="fileWrap">
+    <button class="ib" id="fileMenuBtn" title="파일" aria-haspopup="menu"><i data-icon="menu"></i></button>
+    <div class="menu" id="fileMenu" role="menu" hidden>
+      <button id="fileNew" role="menuitem">새로 만들기 <kbd>Ctrl+N</kbd></button>
+      <button id="fileOpen" role="menuitem">열기… <kbd>Ctrl+O</kbd></button>
+      <hr>
+      <button id="fileSave" role="menuitem">저장 <kbd>Ctrl+S</kbd></button>
+      <button id="fileSaveAs" role="menuitem">다른 이름으로 저장… <kbd>Ctrl+Shift+S</kbd></button>
+    </div>
+  </div>
+  <span id="projName"></span><span id="dirtyTag" hidden>저장 안 됨</span>
+  <span class="grow"></span><span id="toolSlot"></span><span class="grow"></span>
+  <div class="grp">
+    <button class="ib" id="undo" title="되돌리기 (Ctrl+Z)"><i data-icon="undo-2"></i></button>
+    <button class="ib" id="redo" title="다시 실행 (Ctrl+Shift+Z)"><i data-icon="redo-2"></i></button>
+  </div>
+  <div class="grp">
+    <button class="ib" data-view="rulers" title="눈금자 (Shift+R). 눈금자에서 끌어 가이드를 만듭니다"><i data-icon="ruler"></i></button>
+    <button class="ib" data-view="grid" title="격자 (Ctrl+'). 보이는 동안 격자에 맞춰 붙습니다. 간격은 장 속성에서"><i data-icon="grid-3x3"></i></button>
+    <button class="ib" data-view="guides" title="가이드 보이기 (Ctrl+;). 가이드를 눈금자 위로 끌어 놓으면 지워집니다"><i data-icon="scan"></i></button>
+  </div>
+  <button class="ib" id="settings" title="설정: 단축키, 동작, 업데이트"><i data-icon="settings"></i></button>
+  <div class="wrap">
+    <button class="primary" id="exportBtn" title="내보내기 (Ctrl+E)"><i data-icon="download" data-size="16"></i>내보내기</button>
+    <div class="pop" id="exportPop" hidden>
+      <h3>내보내기</h3>
+      <div class="prow"><span>형식</span><select id="exFormat"><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WebP</option><option value="pdf">PDF (래스터)</option><option value="vector">PDF (벡터)</option></select></div>
+      <div class="prow"><span>범위</span><select id="exRange" title="내보낼 장"><option value="current">지금 장</option><option value="all">모든 장</option><option value="selected">선택한 장</option></select></div>
+      <div class="prow"><span>배율</span><select id="exScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select></div>
+      <div class="note" id="exSize"></div>
+      <label class="chk"><input type="checkbox" id="exTransparent"> 배경 투명</label>
+      <button class="primary" id="exRun"><i data-icon="download" data-size="16"></i>내보내기</button>
+    </div>
+  </div>
+</header>
+<div id="main">
+  <nav id="rail" aria-label="도구">
+    <button data-tool="select" title="선택 (V)"><i data-icon="mouse-pointer-2" data-size="20"></i></button>
+    <button data-tool="text" title="글상자 (T)"><i data-icon="type" data-size="20"></i></button>
+    <div class="wrap" id="shapeWrap">
+      <button id="shapeBtn" title="도형: 사각형 (R) · 원 (O) · 다각형" aria-haspopup="menu"><i data-icon="shapes" data-size="20"></i><span class="more"></span></button>
+      <div class="menu" id="shapeMenu" role="menu" hidden>
+        <button data-tool="rect" role="menuitem"><i data-icon="square" data-size="16"></i>사각형 <kbd>R</kbd></button>
+        <button data-tool="ellipse" role="menuitem"><i data-icon="circle" data-size="16"></i>원 <kbd>O</kbd></button>
+        <button data-tool="polygon" role="menuitem"><i data-icon="hexagon" data-size="16"></i>다각형</button>
+      </div>
+    </div>
+    <button data-tool="line" title="선 (L), Shift = 45도 단위"><i data-icon="minus" data-size="20"></i></button>
+    <button data-tool="pen" title="펜 (P): 클릭 = 모서리 점, 끌기 = 곡선 점, 첫 점 클릭 = 닫기, 더블클릭·Enter = 끝"><i data-icon="pen-tool" data-size="20"></i></button>
+    <button id="addImage" title="이미지 넣기(파일을 캔버스에 끌어 놓아도 됨)"><i data-icon="image" data-size="20"></i></button>
+    <input type="file" id="imgFile" accept="image/*" multiple>
+    <span class="hsep"></span>
+    <button id="findBtn" title="찾기·바꾸기 (Ctrl+F)"><i data-icon="search" data-size="20"></i></button>
+  </nav>
+  <aside id="left">
+    <div class="tabs" role="tablist"><button role="tab" data-tab="pages" aria-selected="true">장</button><button role="tab" data-tab="layers" aria-selected="false">레이어</button></div>
+    <div class="tabpane" id="pages" role="tabpanel">
+      <div id="pagesList"></div>
+      <div class="lfoot">
+        <button class="btn grow" id="pageAdd" title="장 추가(지금 장 뒤에, 같은 크기)"><i data-icon="plus" data-size="15"></i>새 장</button>
+        <button class="btn grow" id="pageTpl" title="템플릿: 지금 장을 템플릿으로 저장하거나, 템플릿으로 새 장 만들기"><i data-icon="file-stack" data-size="15"></i>템플릿</button>
+        <button class="btn sq" id="pageDup" title="지금 장 복제"><i data-icon="copy" data-size="15"></i></button>
+        <button class="btn sq" id="pageDel" title="지금 장 삭제"><i data-icon="trash-2" data-size="15"></i></button>
+      </div>
+    </div>
+    <div class="tabpane" id="layers" role="tabpanel" hidden></div>
+  </aside>
+  <div class="split" data-edge="l" title="끌어서 패널 너비 바꾸기(두 번 누르면 기본 너비)"></div>
+  <div id="canvas"></div>
+  <div class="split" data-edge="r" title="끌어서 패널 너비 바꾸기(두 번 누르면 기본 너비)"></div>
+  <aside id="props">
+    <div id="propsBody"></div>
+    <div class="pp-foot">글꼴 <button class="btn" id="fontAdd" title="글꼴 파일(.ttf .otf .woff .woff2)을 프로젝트에 넣기">파일에서…</button><button class="btn" id="sysFonts" title="시스템에 설치된 글꼴을 글꼴 목록에 불러오기">시스템 글꼴</button><input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" multiple></div>
+  </aside>
+</div>
+<footer id="statusbar">
+  <span id="status"></span><span class="grow"></span><span id="pageInfo"></span>
+  <span class="zoom">
+    <button data-cmd="zoomOut" title="축소 (Ctrl+-)">−</button><button id="zoomLabel" data-cmd="zoom100" title="100% (Ctrl+1)">100%</button><button data-cmd="zoomIn" title="확대 (Ctrl+=)">+</button><button class="fit" data-cmd="zoomFit" title="화면에 맞춤 (Ctrl+0)">맞춤</button>
+  </span>
+</footer>
+<script type="module" src="app/main.js"></script>
+</body>
+</html>
