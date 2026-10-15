@@ -2,12 +2,13 @@
 // 더블클릭 = 이름 바꾸기, 끌어 놓기 = 순서, 버튼 = 추가·복제·삭제.
 // 장 목록 변경은 app(app/main.js)의 명령을 부르고, 되돌리기는 PagesEntry로 기록된다.
 
-import { esc, trackPointer } from './util.js';
+import { esc, trackPointer, onLongPress } from './util.js';
 import { icon } from './icons.js';
 
 export const PAGES_CSS = `
 .pg-list{font-size:12.5px;user-select:none;-webkit-user-select:none;padding-bottom:4px}
 .pg-row{display:flex;align-items:center;gap:8px;min-height:30px;padding:3px 6px;border-radius:8px;cursor:default;position:relative;margin-bottom:2px}
+@media (pointer: coarse){.pg-row{min-height:40px;-webkit-user-select:none;user-select:none}}
 .pg-row:hover{background:#f0eeea}
 .pg-row.cur{background:var(--accent-bg,#e7effd)}
 .pg-row.sel .pg-no{color:#fff;background:var(--accent,#2d6cdf);border-radius:3px}
@@ -44,6 +45,8 @@ export class PagesPanel {
     this.renaming = null;
     this.drag = null;
     this.el.addEventListener('mousedown', (e) => this.onDown(e));
+    // 손가락: 톡 = 그 장으로, 길게 누르기 = 선택에 더하기·빼기(내보내기 '선택한 장'), 길게 누른 채 끌기 = 순서 바꾸기
+    onLongPress(this.el, (e) => this.onDown(e), { filter: (e) => !!e.target.closest('.pg-row:not([data-master])'), mod: true });
     this.el.addEventListener('dblclick', (e) => { const r = e.target.closest('.pg-row'); if (r && !r.dataset.master) this.startRename(r.dataset.id); });
   }
 

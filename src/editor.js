@@ -14,6 +14,7 @@ import { History, TextEntry } from './history.js';
 import { toggleMark, setMark, removeMark, clearMarks, stepSize, markState } from './commands.js';
 import { createKeymap, lookup } from './keymap.js';
 import { writeClipboard, parseHTML, parseText } from './clipboard.js';
+import { trackPointer, pressEvent } from './pointer.js';
 
 const GRAPHEMES = new Intl.Segmenter('ko', { granularity: 'grapheme' });
 const JSON_CACHE = new WeakMap(); // ProseMirror 블록 노드 → JSON
@@ -716,7 +717,15 @@ export class CanvasEditor {
 
   bindMouse(host, kOf) {
     const idx = typeof kOf === 'function' ? kOf : () => kOf;
-    host.addEventListener('mousedown', (e) => {
+    // 손가락·펜: 톡 = 커서, 끌기 = 범위 선택, 두 번 톡 = 낱말, 세 번 톡 = 문단(마우스와 같은 처리)
+    host.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || !e.isPrimary) return;
+      e.preventDefault();
+      this.touchInput = true;
+      down(pressEvent(e));
+    });
+    host.addEventListener('mousedown', (e) => { this.touchInput = false; down(e); });
+    const down = (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
       this.input.focus({ preventScroll: true });
@@ -755,13 +764,19 @@ export class CanvasEditor {
         const h = this.mapper.posAt(p.x, p.y);
         if (h) this.setSelection(TextSelection.create(this.state.doc, anchor, h.pos), { assoc: h.assoc });
       };
-      const up = () => {
-        window.removeEventListener('mousemove', move);
-        window.removeEventListener('mouseup', up);
-      };
-      window.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', up);
-    });
+      trackPointer(move, null);
+    };
+  }
+
+  // 화면 자판 띄우기(손가락으로 편집할 때). 자판은 손을 뗀 직후(사용자 동작 안)에만 뜬다.
+  // 이미 포커스가 있으면 focus()만으로는 다시 뜨지 않으므로 잠깐 풀었다가 다시 준다.
+  showKeyboard() {
+    if (!this.touchInput && !matchMedia('(pointer: coarse)').matches) return;
+    if (this.comp) return; // 조합 중에는 건드리지 않는다
+    const inp = this.input;
+    if (document.activeElement === inp) inp.blur();
+    inp.focus({ preventScroll: true });
+    try { navigator.virtualKeyboard?.show(); } catch { /* 지원 안 함 */ }
   }
 
   // 출력용: 확정된 문서만으로 새로 배치·렌더(커서·선택·조합 미리보기·디버그 표시 없음). k: 이어진 글상자 번호

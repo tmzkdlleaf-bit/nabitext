@@ -3,7 +3,7 @@
 //   눈·자물쇠 버튼 = 숨김·잠금, ▸ = 그룹 펼치기, 끌어 놓기 = 순서 바꾸기·그룹 안팎으로 옮기기
 
 import * as M from './model.js';
-import { esc, trackPointer } from './util.js';
+import { esc, trackPointer, onLongPress } from './util.js';
 
 const TYPE_MARK = { text: 'T', image: '▣', shape: '■', group: '▤', path: '✎', pathText: '〰' };
 
@@ -18,6 +18,7 @@ export const LAYERS_CSS = `
 .lp-name{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .lp-name input{width:100%;font:inherit;padding:1px 3px;border:1px solid var(--accent,#2d6cdf);border-radius:2px}
 .lp-btn{width:22px;height:20px;border:0;background:none;color:#999;cursor:pointer;padding:0;font-size:12px;flex:none}
+@media (pointer: coarse){.lp-row{height:40px;-webkit-user-select:none;user-select:none}.lp-btn{width:34px;height:34px;font-size:15px}}
 .lp-btn.on{color:#222}
 .lp-row:not(:hover) .lp-btn:not(.on){visibility:hidden}
 .lp-drop{position:absolute;left:0;right:0;height:2px;background:var(--accent,#2d6cdf);pointer-events:none}
@@ -36,6 +37,8 @@ export class LayersPanel {
     this.renaming = null;
     this.drag = null;
     this.el.addEventListener('mousedown', (e) => this.onDown(e));
+    // 손가락: 톡 = 고르기(마우스 클릭과 같음), 길게 누르기 = 선택에 더하기·빼기, 길게 누른 채 끌기 = 순서 바꾸기(그동안 스크롤 멈춤)
+    onLongPress(this.el, (e) => this.onDown(e), { filter: (e) => !!e.target.closest('.lp-row') && !e.target.closest('[data-act]'), mod: true });
     this.el.addEventListener('dblclick', (e) => { const r = e.target.closest('.lp-row'); if (r && e.target.closest('.lp-name')) this.startRename(r.dataset.id); });
     this.el.addEventListener('mouseover', (e) => { const r = e.target.closest('.lp-row'); this.setHover(r?.dataset.id ?? null); });
     this.el.addEventListener('mouseleave', () => this.setHover(null));

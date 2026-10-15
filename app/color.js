@@ -116,5 +116,6 @@ export const COLOR_CSS = `
 .cf button:disabled{opacity:.35;cursor:default}
 .cf-pop{display:flex;flex-wrap:wrap;gap:4px;width:180px;padding:6px;background:#fff;border:1px solid #cfccc6;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
 .cf-pop .cf-sw{width:22px;height:22px;border:1px solid rgba(0,0,0,.2);border-radius:3px;cursor:pointer;padding:0}
+@media (pointer: coarse){.cf-pop .cf-sw{width:32px;height:32px}.cf-pick{width:32px;height:28px}}
 .cf-pop .cf-add{width:22px;height:22px;border:1px dashed #999;background:#fff;border-radius:3px;cursor:pointer;padding:0}
 `;

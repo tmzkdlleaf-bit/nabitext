@@ -6,7 +6,7 @@
 
 import * as G from './geom.js';
 import * as M from './model.js';
-import { r3, trackPointer } from './util.js';
+import { r3, trackPointer, pressEvent } from './util.js';
 
 export const RULER_PX = 20;
 const GUIDE_HIT_PX = 4;
@@ -36,6 +36,9 @@ export function installGuides(PV) {
     this.rulers = { top: mk('top'), left: mk('left'), corner: mk('corner') };
     this.rulers.top.addEventListener('mousedown', (e) => { if (e.button === 0) { e.preventDefault(); e.stopPropagation(); this.startGuideDrag(e, { axis: 'y', index: -1 }); } });
     this.rulers.left.addEventListener('mousedown', (e) => { if (e.button === 0) { e.preventDefault(); e.stopPropagation(); this.startGuideDrag(e, { axis: 'x', index: -1 }); } });
+    // 손가락·펜: 눈금자에서 끌어 가이드 만들기(마우스와 같게)
+    for (const [r, axis] of [[this.rulers.top, 'y'], [this.rulers.left, 'x']])
+      r.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' || this.touches?.size > 1) return; e.preventDefault(); e.stopPropagation(); this.startGuideDrag(pressEvent(e, 1), { axis, index: -1 }); });
     this.applyRulerVisibility();
   };
 

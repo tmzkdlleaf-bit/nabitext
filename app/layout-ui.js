@@ -69,25 +69,30 @@ export function initSplitters(getLayout, onResize) {
       const leftSide = sp.dataset.edge === 'l';
       return (leftSide !== !!L.swap) ? { el: $('left'), key: 'leftW', def: LEFT_W, sign: leftSide ? 1 : -1 } : { el: $('props'), key: 'rightW', def: RIGHT_W, sign: leftSide ? 1 : -1 };
     };
-    sp.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    // 마우스·손가락·펜 모두(손가락은 이 손잡이에서 스크롤 대신 끌기: CSS touch-action: none)
+    sp.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !e.isPrimary) return;
       e.preventDefault();
+      const id = e.pointerId;
       const p = panelOf(), x0 = e.clientX, w0 = p.el.getBoundingClientRect().width;
       document.body.classList.add('resizing');
       let raf = 0, w = w0;
       const mm = (ev) => {
+        if (ev.pointerId !== id) return;
         w = clampW(w0 + (ev.clientX - x0) * p.sign, w0);
         if (!raf) raf = requestAnimationFrame(() => { raf = 0; p.el.style.width = w + 'px'; onResize(p.key, w, false); });
       };
-      const mu = () => {
-        window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu);
+      const mu = (ev) => {
+        if (ev.pointerId !== id) return;
+        window.removeEventListener('pointermove', mm); window.removeEventListener('pointerup', mu); window.removeEventListener('pointercancel', mu);
         document.body.classList.remove('resizing');
         cancelAnimationFrame(raf);
         p.el.style.width = w + 'px';
         onResize(p.key, w, true);
       };
-      window.addEventListener('mousemove', mm);
-      window.addEventListener('mouseup', mu);
+      window.addEventListener('pointermove', mm);
+      window.addEventListener('pointerup', mu);
+      window.addEventListener('pointercancel', mu);
     });
     sp.addEventListener('dblclick', () => { const p = panelOf(); p.el.style.width = p.def + 'px'; onResize(p.key, p.def, true); });
   }

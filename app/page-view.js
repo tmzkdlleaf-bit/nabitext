@@ -9,7 +9,7 @@
 
 import * as G from './geom.js';
 import * as M from './model.js';
-import { trackPointer } from './util.js';
+import { trackPointer, pressEvent, abortTrack } from './util.js';
 import { buildMasterLayer, masterKey, pageNumber } from './master.js';
 import { r3, pageCss, pageBgCss, boxCss, contentOf, contentKey } from './render-el.js';
 import { installModes, pathElementFrom } from './modes.js';
@@ -21,6 +21,10 @@ import { installGuides } from './guides.js';
 
 const HANDLE_PX = 8;      // 핸들 크기(화면 px)
 const ROTATE_GAP_PX = 26; // 회전 핸들과 상자 윗변 사이(화면 px)
+// 손가락으로 쓸 때(touchMode): 핸들을 크게 그리고, 누르는 범위도 넓게
+const TOUCH_HANDLE_PX = 14, TOUCH_HIT_PX = 22, TOUCH_ROTATE_GAP_PX = 40;
+const GESTURE_SLOP_PX = 10; // 두 손가락이 이만큼 움직이기 전에는 탭(되돌리기)으로 본다
+const GESTURE_TAP_MS = 350;
 const CLICK_SLOP_PX = 3;  // 이만큼 움직이기 전까지는 클릭으로 본다
 const Z_MIN = 0.05, Z_MAX = 16;
 
@@ -91,7 +95,12 @@ export class PageView {
     this.initGuides();
     this.bind();
     this.autoFit = true; // 사용자가 확대·이동하기 전까지는 창 크기가 바뀌면 다시 '화면에 맞춤'
-    const onResize = () => { this._rect = null; if (this.autoFit) this.zoomFit(); else this.setView(this.z, this.px, this.py); };
+    const onResize = () => {
+      this._rect = null;
+      // 손가락으로 글상자 편집 중: 화면 자판이 올라와 캔버스가 줄어도 확대 비율은 그대로, 커서만 보이게
+      if (this.editing && this.touchMode) { this.setView(this.z, this.px, this.py); this.revealCaret(); return; }
+      if (this.autoFit) this.zoomFit(); else this.setView(this.z, this.px, this.py);
+    };
     new ResizeObserver(onResize).observe(this.viewport);
     window.addEventListener('resize', () => { this._rect = null; });
   }
@@ -365,7 +374,8 @@ export class PageView {
     }
     const top = this.pageToView(G.fromLocal(b, { x: b.w / 2, y: 0 }));
     const a = G.rad(b.rotation || 0);
-    out.push({ kind: 'rotate', x: top.x + Math.sin(a) * ROTATE_GAP_PX, y: top.y - Math.cos(a) * ROTATE_GAP_PX });
+    const gap = this.touchMode ? TOUCH_ROTATE_GAP_PX : ROTATE_GAP_PX;
+    out.push({ kind: 'rotate', x: top.x + Math.sin(a) * gap, y: top.y - Math.cos(a) * gap });
     return out;
   }
 
@@ -411,8 +421,9 @@ export class PageView {
         s += `<line x1="${r3(top.x)}" y1="${r3(top.y)}" x2="${r3(rot.x)}" y2="${r3(rot.y)}" stroke="#2d7ff9" stroke-width="1"/>`;
       }
       for (const h of hs) {
-        if (h.kind === 'rotate') s += `<circle data-h="rotate" cx="${r3(h.x)}" cy="${r3(h.y)}" r="5" fill="#fff" stroke="#2d7ff9" stroke-width="1.5"/>`;
-        else s += `<rect data-h="${h.hx},${h.hy}" x="${r3(h.x - HANDLE_PX / 2)}" y="${r3(h.y - HANDLE_PX / 2)}" width="${HANDLE_PX}" height="${HANDLE_PX}" fill="#fff" stroke="#2d7ff9" stroke-width="1.5" transform="rotate(${r3(b.rotation || 0)} ${r3(h.x)} ${r3(h.y)})"/>`;
+        const hp = this.touchMode ? TOUCH_HANDLE_PX : HANDLE_PX;
+        if (h.kind === 'rotate') s += `<circle data-h="rotate" cx="${r3(h.x)}" cy="${r3(h.y)}" r="${this.touchMode ? 8 : 5}" fill="#fff" stroke="#2d7ff9" stroke-width="1.5"/>`;
+        else s += `<rect data-h="${h.hx},${h.hy}" x="${r3(h.x - hp / 2)}" y="${r3(h.y - hp / 2)}" width="${hp}" height="${hp}" fill="#fff" stroke="#2d7ff9" stroke-width="1.5" transform="rotate(${r3(b.rotation || 0)} ${r3(h.x)} ${r3(h.y)})"/>`;
       }
     }
     for (const g of this.guides) {
@@ -433,6 +444,15 @@ export class PageView {
   bind() {
     const vp = this.viewport;
     vp.addEventListener('mousedown', (e) => this.onDown(e), true);
+    // 손가락·펜(태블릿): 한 손가락 = 마우스 왼쪽 단추와 같게, 두 손가락 = 확대·이동, 두/세 손가락 탭 = 되돌리기/다시 실행
+    this.touches = new Map();   // 캔버스에 닿아 있는 손가락 id → 화면 좌표
+    this.gesture = null;        // 두 손가락 확대·이동 중
+    this.touchMode = false;     // 마지막 입력이 손가락·펜이면 true(핸들 크게)
+    vp.addEventListener('pointerdown', (e) => this.onTouchDown(e), true);
+    window.addEventListener('pointermove', (e) => this.onTouchMove(e));
+    window.addEventListener('pointerup', (e) => this.onTouchUp(e));
+    window.addEventListener('pointercancel', (e) => this.onTouchUp(e, true));
+    vp.addEventListener('contextmenu', (e) => { if (this.touchMode) e.preventDefault(); }); // 길게 눌렀을 때 뜨는 메뉴
     vp.addEventListener('mousemove', (e) => { if (!this.drag) this.onHover(e); });
     vp.addEventListener('mouseleave', () => { this.hover = null; this.drawOverlay(); });
     vp.addEventListener('wheel', (e) => {
@@ -457,9 +477,78 @@ export class PageView {
     });
   }
 
+  // 편집 중 커서가 캔버스 밖(화면 자판 아래 등)이면 보이는 곳으로 옮긴다
+  revealCaret(margin = 48) {
+    const ed = this.editing && this.activeEditor;
+    if (!ed?.caret) return;
+    const c = ed.input.getBoundingClientRect(), r = this.rect();
+    if (!c.height || !r.height) return;
+    const m = Math.min(margin, r.height / 4, r.width / 4);
+    let dx = 0, dy = 0;
+    if (c.bottom > r.bottom - m) dy = r.bottom - m - c.bottom;
+    else if (c.top < r.top + m) dy = r.top + m - c.top;
+    if (c.right > r.right - m) dx = r.right - m - c.right;
+    else if (c.left < r.left + m) dx = r.left + m - c.left;
+    if (dx || dy) this.setView(this.z, this.px + dx, this.py + dy);
+  }
+
+  // ---------- 손가락·펜 ----------
+  onTouchDown(e) {
+    if (e.pointerType === 'mouse') { if (this.touchMode) { this.touchMode = false; this.drawOverlay(); } return; }
+    e.preventDefault(); // 이어서 오는 호환 마우스 이벤트(mousedown)를 막는다 → 같은 누름을 두 번 처리하지 않음
+    if (!this.touchMode) { this.touchMode = true; this.drawOverlay(); }
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const n = this.touches.size;
+    if (n === 1) {
+      this.gesture = null;
+      if (e.target.closest?.('.pv-ruler')) return; // 눈금자: 가이드 끌기(guides.js)
+      return this.onDown(pressEvent(e));
+    }
+    if (this.gesture) { this.gesture.max = Math.max(this.gesture.max, n); return; }
+    // 두 번째 손가락: 한 손가락 동작을 아직 움직이지 않았으면 취소하고 확대·이동으로. 이미 끄는 중이면 그대로 둔다
+    if (this.drag && !abortTrack()) return;
+    abortTrack();
+    this.drag = { kind: 'pinch' };
+    this.marquee = null; this.guides = []; this.spacing = [];
+    const [a, b] = [...this.touches.values()];
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    this.gesture = { t0: e.timeStamp, max: n, moved: false, mid0: mid, mid, d0: Math.hypot(a.x - b.x, a.y - b.y), d: Math.hypot(a.x - b.x, a.y - b.y) };
+    this.drawOverlay();
+  }
+  onTouchMove(e) {
+    const t = this.touches.get(e.pointerId);
+    if (!t) return;
+    t.x = e.clientX; t.y = e.clientY;
+    const g = this.gesture;
+    if (!g) return;
+    const [a, b] = [...this.touches.values()];
+    if (!b) return;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    if (!g.moved && Math.abs(d - g.d0) < GESTURE_SLOP_PX && Math.hypot(mid.x - g.mid0.x, mid.y - g.mid0.y) < GESTURE_SLOP_PX) return;
+    g.moved = true;
+    const r = this.rect();
+    if (Math.abs(d - g.d) > 0.5) this.zoomAt(this.z * d / Math.max(1, g.d), g.mid.x - r.left, g.mid.y - r.top);
+    this.setView(this.z, this.px + mid.x - g.mid.x, this.py + mid.y - g.mid.y);
+    g.mid = mid; g.d = d;
+  }
+  onTouchUp(e, cancelled = false) {
+    if (!this.touches.delete(e.pointerId)) return;
+    const g = this.gesture;
+    if (g) {
+      if (this.touches.size) return; // 남은 손가락이 다 떨어질 때까지 기다린다(다시 한 손가락 끌기로 바꾸지 않음)
+      this.gesture = null;
+      this.drag = null;
+      this.drawOverlay();
+      if (!cancelled && !g.moved && e.timeStamp - g.t0 < GESTURE_TAP_MS) this.onGestureTap?.(g.max);
+      return;
+    }
+    // 글상자 편집 중이면 화면 자판을 띄운다(자판은 손을 뗄 때에만 띄울 수 있음). 탭 처리(편집 들어가기)가 끝난 뒤에
+    if (!this.touches.size && !cancelled) setTimeout(() => { if (this.editing) this.activeEditor?.showKeyboard(); }, 0);
+  }
+
   handleAt(vx, vy) {
     for (const h of this.handles()) {
-      const r = h.kind === 'rotate' ? 8 : HANDLE_PX / 2 + 3;
+      const r = this.touchMode ? TOUCH_HIT_PX : h.kind === 'rotate' ? 8 : HANDLE_PX / 2 + 3;
       if (Math.abs(h.x - vx) <= r && Math.abs(h.y - vy) <= r) return h;
     }
     return null;
@@ -518,6 +607,9 @@ export class PageView {
       if (e.detail >= 2 && hit.leaf.type === 'path' && !hit.leaf.locked) return this.enterPathEdit(hit.leaf.id);
       if (e.detail >= 2 && hit.leaf.type === 'image' && !hit.leaf.locked) return this.enterCrop(hit.leaf.id);
       const id = hit.top.id;
+      // 손가락: 이미 고른 글상자를 다시 톡 누르면 편집(움직이지 않고 뗐을 때)
+      if (e.touch && hit.leaf.type === 'text' && hit.leaf.id === id && !hit.leaf.locked && this.selection.length === 1 && this.selection[0] === id)
+        return this.startMove(e, p, () => this.enterEdit(id, { x: e.clientX, y: e.clientY }));
       if (e.shiftKey) {
         // Shift+클릭: 선택에 더하기/빼기. Shift+끌기: 한 축으로 옮기기
         if (!this.selection.includes(id)) { this.select([...this.selection, id]); return this.startMove(e, p); }
@@ -596,11 +688,18 @@ export class PageView {
     const b0 = { x: box.x, y: box.y, w: box.w, h: box.h, rotation: box.rotation || 0 };
     const targets = this.snapTargets(new Set(M.idsOf(this.selectedNodes())));
     this.drag = { kind: 'resize' };
+    // 손가락(Shift가 없음): 사진·그룹·여러 개의 모서리 핸들은 비율 유지
+    const touchRatio = !!e.touch && !!hx && !!hy && (!single || leaves.some((n) => n.type === 'image'));
+    // 손가락은 손잡이에서 조금 떨어져 눌러도 잡히므로(넓은 범위), 누른 곳과 손잡이의 차이를 빼서 모서리가 손가락으로 튀지 않게
+    const hp = G.fromLocal(b0, { x: b0.w * (hx + 1) / 2, y: b0.h * (hy + 1) / 2 });
+    const off = e.touch ? { x: p0.x - hp.x, y: p0.y - hp.y } : { x: 0, y: 0 };
     this.track(e, (ev, p) => {
-      let nb = G.resizeOne(b0, hx, hy, p, { keepRatio: ev.shiftKey, fromCenter: ev.altKey });
+      p = { x: p.x - off.x, y: p.y - off.y };
+      const keepRatio = ev.shiftKey || touchRatio;
+      let nb = G.resizeOne(b0, hx, hy, p, { keepRatio, fromCenter: ev.altKey });
       let guides = [];
       // 회전 없는 상자는 움직이는 변을 스냅(비율 유지·중심 기준 중에는 끔)
-      if (!b0.rotation && !ev.shiftKey && !ev.altKey) {
+      if (!b0.rotation && !keepRatio && !ev.altKey) {
         const lim = SNAP_PX / this.z;
         const pick = (v, cands) => this.snapPick(v, cands, lim);
         let bx = null, by = null;

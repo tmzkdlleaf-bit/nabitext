@@ -1,0 +1,20 @@
+{
+  "name": "나비글쓰기",
+  "short_name": "나비글쓰기",
+  "description": "글과 이미지를 결합한 이미지 제작 편집기",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e9e7e3",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "res/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "res/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "res/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    { "action": "./index.html", "accept": { "application/x-nabitext": [".nabi"] } }
+  ]
+}

@@ -28,15 +28,8 @@ export function pickFile(accept, { multiple = false } = {}) {
   });
 }
 
-// 창 전체 드래그 추적: move(ev), up(ev). 반환값을 부르면 중간에 그만둔다
-export function trackPointer(move, up) {
-  const mm = (ev) => move(ev);
-  const mu = (ev) => { stop(); up?.(ev); };
-  const stop = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
-  window.addEventListener('mousemove', mm);
-  window.addEventListener('mouseup', mu);
-  return stop;
-}
+// 끌기 추적·손가락 입력 도우미는 src/pointer.js(편집기 엔진도 같이 씀)
+export { trackPointer, abortTrack, tapCount, pressEvent, touchActive, lockTouchScroll, onLongPress } from '../src/pointer.js';
 
 // 앱 안 창 틀: 화면을 덮는 배경(.modal-bg) + 상자(.modal). 문서에 붙여서 배경 요소를 돌려준다
 export function modal(inner, cls = '') {

@@ -130,7 +130,7 @@ class StoryMethods {
     ed.members = list.map((n) => n.id);
     Object.defineProperty(ed, 'elementId', { get: () => ed.members[0] });
     const mine = () => this.editing && this.editorOf(this.node(this.editing)) === ed;
-    ed.onState = () => { if (mine()) { this.followCaret(ed); this.onChange(this); } }; // 커서·선택 이동 → 속성 패널 갱신
+    ed.onState = () => { if (mine()) { this.followCaret(ed); if (this.touchMode) this.revealCaret(); this.onChange(this); } }; // 커서·선택 이동 → 속성 패널 갱신(손가락 편집이면 커서가 보이게)
     // 되돌리기가 이 편집기의 글자를 바꾸면 편집기가 포커스를 가져간다 → 커서가 있는 글상자 편집 모드로(다른 장이면 그 장으로)
     ed.input.addEventListener('focus', () => {
       if (mine()) return; // 이미 이 이야기를 편집 중(편집 모드로 들어가며 포커스를 준 경우)

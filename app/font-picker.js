@@ -27,6 +27,7 @@ const CSS = `
 .fp-foot{display:flex;gap:6px;padding:6px 8px;border-top:1px solid var(--line2,#ecebe7)}
 .fp-foot button{flex:1;border:1px solid var(--line,#e4e1dc);background:var(--panel,#fbfaf8);border-radius:5px;padding:4px 6px;cursor:pointer;font-size:12px}
 .fp-foot button:hover{background:var(--bg,#f4f3f0)}
+@media (pointer: coarse){.fp-it{min-height:40px}.fp-x{visibility:visible;font-size:18px;padding:0 8px}.fp-foot button{padding:9px 6px}.fp-pop{max-height:420px}}
 `;
 let cssInjected = false;
 let open = null; // 지금 열린 목록 { close() }

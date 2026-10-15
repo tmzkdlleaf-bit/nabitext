@@ -602,6 +602,11 @@ $('fontAdd').addEventListener('mousedown', (e) => e.preventDefault());
 $('fontAdd').onclick = () => $('fontFile').click();
 // 캔버스에 글꼴 파일을 끌어다 놓아도 넣는다
 view.onFontFiles = (files) => addFontFiles(files);
+// 태블릿: 두 손가락 톡 = 되돌리기, 세 손가락 톡 = 다시 실행
+view.onGestureTap = (n) => {
+  if (n === 2 && history.canUndo) { history.undo(); status('되돌리기(두 손가락 톡)'); }
+  else if (n >= 3 && history.canRedo) { history.redo(); status('다시 실행(세 손가락 톡)'); }
+};
 
 // ---------- 도구 막대 ----------
 const keep = (el) => el.addEventListener('mousedown', (e) => e.preventDefault()); // 편집기 포커스·한글 조합을 뺏지 않음
@@ -691,6 +696,21 @@ function togglePanels() {
   status(show ? '패널을 보입니다' : '패널을 숨겼습니다 · 다시 보이려면 Ctrl+\\ 또는 설정 → 화면 배치');
 }
 app.togglePanels = togglePanels;
+// 위 막대의 패널 단추(태블릿·좁은 화면에서 보임). 좁은 화면이면 장·레이어 패널은 캔버스 위 서랍으로 열고 닫는다
+const narrow = matchMedia('(max-width: 1000px)');
+function togglePanel(side) {
+  const s = loadSettings(), L = s.layout;
+  if (side === 'left' && narrow.matches && L.showLeft) { document.body.classList.toggle('drawer-left'); return; }
+  const k = side === 'left' ? 'showLeft' : 'showRight';
+  L[k] = !L[k];
+  if (side === 'left' && L[k] && narrow.matches) document.body.classList.add('drawer-left');
+  saveSettings(s); applySettings(s, settingsCtx);
+}
+$('leftToggle').onclick = () => togglePanel('left');
+$('rightToggle').onclick = () => togglePanel('right');
+// 서랍이 열린 채 캔버스를 누르면 닫는다
+$('canvas').addEventListener('pointerdown', () => document.body.classList.remove('drawer-left'), true);
+narrow.addEventListener('change', () => document.body.classList.remove('drawer-left'));
 $('settings').onclick = () => app.openSettings();
 $('addImage').onclick = () => $('imgFile').click();
 $('imgFile').onchange = async () => {
@@ -850,6 +870,9 @@ Object.assign(window.__nabi, {
   save, openBytes, newProject, autosave, findBar,
 });
 claimTab().catch(() => {});
+// 웹판(https): 인터넷 없이도 열리게 서비스 워커 등록(홈 화면에 추가한 앱 포함). Electron·개발 서버(http)에서는 하지 않음
+if (!platform.isElectron && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+  navigator.serviceWorker.register('sw.js').catch((err) => console.warn('서비스 워커 등록 실패', err));
 await offerRecovery();
 const pending = await platform.takePendingFile();
 if (pending && await confirmDiscard('파일 열기')) await openBytes(pending.bytes, pending.path, pending.name);

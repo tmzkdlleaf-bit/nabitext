@@ -62,6 +62,7 @@ export const PROPS_CSS = `
 .pp .icorow button:hover{background:var(--bg,#f4f3f0)}
 .pp .icorow i{width:1px;height:18px;background:var(--line,#e4e1dc);margin:5px 4px}
 .pp .note{color:var(--muted,#8a857d);margin:0 0 6px;line-height:1.5}
+@media (pointer: coarse){.pp label.f{height:38px}.pp .seg button.tg{height:36px;min-width:38px}.pp .icorow button{width:38px;height:36px}.pp .row{gap:8px;margin-bottom:8px}.pp-h{min-height:34px}}
 `;
 
 const BLENDS = [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'],

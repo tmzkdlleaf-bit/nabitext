@@ -2,8 +2,11 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
 <title>나비글쓰기</title>
 <link rel="icon" href="res/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ffffff">
 <script type="importmap">
 { "imports": {
   "orderedmap": "./vendor/orderedmap.js",
@@ -19,7 +22,7 @@
 <style>
   /* 화면 구성(12단계 개편): 위 막대 · 왼쪽 도구 줄 · 장/레이어 탭 · 캔버스 · 속성 패널 · 상태 줄 */
   :root { --bg: #f4f3f0; --panel: #fbfaf8; --line: #e4e1dc; --line2: #ecebe7; --text: #23211e; --muted: #8a857d; --accent: #2d6cdf; --accent-bg: #e7effd; --r: 6px; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; height: 100%; overscroll-behavior: none; /* 태블릿: 아래로 당겨 새로 고침 막기 */ }
   body { display: flex; flex-direction: column; font: 13px/1.4 system-ui, "Noto Sans KR", "Noto Sans CJK KR", sans-serif; color: var(--text); background: var(--bg); }
   button { font: inherit; color: inherit; }
   .ic { display: block; flex: none; }
@@ -80,7 +83,7 @@
   #left { order: 1; } .split[data-edge="l"] { order: 2; } #canvas { order: 3; } .split[data-edge="r"] { order: 4; } #props { order: 5; }
   .swap #left { order: 5; border-right: 0; border-left: 1px solid var(--line); }
   .swap #props { order: 1; border-left: 0; border-right: 1px solid var(--line); }
-  .split { flex: none; width: 7px; margin: 0 -3px; position: relative; z-index: 5; cursor: col-resize; }
+  .split { flex: none; width: 7px; margin: 0 -3px; position: relative; z-index: 5; cursor: col-resize; touch-action: none; }
   .split:hover, .resizing .split:hover { background: rgba(45,108,223,.25); }
   .resizing, .resizing * { cursor: col-resize !important; user-select: none; }
   .hide-left #left, .hide-right #props, .hide-status #statusbar { display: none !important; }
@@ -138,6 +141,43 @@
   .tpl-acts button { font: inherit; font-size: 11px; padding: 2px 6px; border: 1px solid #cfccc6; background: #fff; border-radius: 3px; cursor: pointer; }
   .tpl-empty { grid-column: 1 / -1; color: #777; line-height: 1.7; padding: 16px 4px; }
   .modal-input { width: 100%; box-sizing: border-box; font: inherit; padding: 5px 7px; border: 1px solid #cfccc6; border-radius: 4px; margin: 0 0 12px; }
+  /* ---------- 태블릿(손가락·펜) ---------- */
+  body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; /* 두 번 톡 확대 끄기(캔버스는 touch-action: none) */ }
+  #left, #props, #top, #statusbar, .menu, .pop, .modal { -webkit-touch-callout: none; }
+  .panel-toggle { display: none; }
+  @media (pointer: coarse) {
+    /* 손가락으로 누르기 쉬운 크기(대략 40px 이상) */
+    #top { height: 54px; gap: 8px; }
+    .ib { width: 42px; height: 40px; }
+    .primary { height: 40px; }
+    .tools-top #rail > button, .tools-top #rail .wrap > button { width: 44px; height: 40px; }
+    #rail > button, #rail .wrap > button { width: 46px; height: 46px; }
+    .tools-left #rail, .tools-right #rail { width: 58px; }
+    .menu button { padding: 11px 12px; }
+    .menu kbd { display: none; }
+    .btn { height: 38px; }
+    .lfoot .btn.sq { width: 38px; }
+    .pp-foot .btn { height: 34px; }
+    #statusbar { height: 40px; }
+    .zoom button { min-width: 38px; height: 34px; }
+    .modal-btns button { padding: 10px 16px; }
+    .pop select { height: 40px; }
+    .split { width: 16px; margin: 0 -8px; }
+    .panel-toggle { display: grid; }
+    .tabs button { height: 36px; }
+  }
+  /* 좁은 화면(태블릿 세로 등): 장·레이어 패널은 캔버스 위에 덮는 서랍으로(위 막대의 패널 단추로 열고 닫음) */
+  @media (max-width: 1000px) {
+    #main { position: relative; }
+    #main > #left { position: absolute; top: 0; bottom: 0; left: 0; z-index: 40; box-shadow: 4px 0 18px rgba(0,0,0,.14); transform: translateX(-105%); transition: transform .18s ease; }
+    .swap #main > #left { left: auto; right: 0; transform: translateX(105%); box-shadow: -4px 0 18px rgba(0,0,0,.14); }
+    body.drawer-left #main > #left { transform: none; }
+    .split[data-edge="l"]:not(.swap *), .swap .split[data-edge="r"] { display: none; }
+    #props { width: 264px !important; }
+    .panel-toggle { display: grid; }
+    #projName { max-width: 120px; }
+    #top .grp.viewopts { display: none; }
+  }
 </style>
 </head>
 <body class="tools-top">
@@ -152,17 +192,19 @@
       <button id="fileSaveAs" role="menuitem">다른 이름으로 저장… <kbd>Ctrl+Shift+S</kbd></button>
     </div>
   </div>
+  <button class="ib panel-toggle" id="leftToggle" title="장·레이어 패널 열기·닫기"><i data-icon="panel-left"></i></button>
   <span id="projName"></span><span id="dirtyTag" hidden>저장 안 됨</span>
   <span class="grow"></span><span id="toolSlot"></span><span class="grow"></span>
   <div class="grp">
     <button class="ib" id="undo" title="되돌리기 (Ctrl+Z)"><i data-icon="undo-2"></i></button>
     <button class="ib" id="redo" title="다시 실행 (Ctrl+Shift+Z)"><i data-icon="redo-2"></i></button>
   </div>
-  <div class="grp">
+  <div class="grp viewopts">
     <button class="ib" data-view="rulers" title="눈금자 (Shift+R). 눈금자에서 끌어 가이드를 만듭니다"><i data-icon="ruler"></i></button>
     <button class="ib" data-view="grid" title="격자 (Ctrl+'). 보이는 동안 격자에 맞춰 붙습니다. 간격은 장 속성에서"><i data-icon="grid-3x3"></i></button>
     <button class="ib" data-view="guides" title="가이드 보이기 (Ctrl+;). 가이드를 눈금자 위로 끌어 놓으면 지워집니다"><i data-icon="scan"></i></button>
   </div>
+  <button class="ib panel-toggle" id="rightToggle" title="속성 패널 보이기·숨기기"><i data-icon="panel-right"></i></button>
   <button class="ib" id="settings" title="설정: 단축키, 동작, 업데이트"><i data-icon="settings"></i></button>
   <div class="wrap">
     <button class="primary" id="exportBtn" title="내보내기 (Ctrl+E)"><i data-icon="download" data-size="16"></i>내보내기</button>

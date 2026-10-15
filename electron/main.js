@@ -14,12 +14,12 @@ const ROOT = path.join(__dirname, '..');
 const HOST = 'bundle';
 const ORIGIN = `app://${HOST}`;
 // app://bundle/ 로 내보내는 최상위 항목. electron/, node_modules/, package.json 등은 렌더러에서 읽을 수 없다.
-const SERVED = new Set(['index.html', 'demo.html', 'app', 'res', 'src', 'vendor', 'demo']);
+const SERVED = new Set(['index.html', 'demo.html', 'manifest.webmanifest', 'app', 'res', 'src', 'vendor', 'demo']);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
-  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.md': 'text/plain; charset=utf-8',
+  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.md': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json',
 };
 
 // standard: 상대 주소·origin이 일반 웹처럼 동작. secure: 보안 컨텍스트(Local Font Access·클립보드 API 조건).
