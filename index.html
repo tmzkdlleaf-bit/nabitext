@@ -18,7 +18,7 @@
   "fflate": "./vendor/fflate.js"
 } }
 </script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet" crossorigin="anonymous">
 <style>
   /* 화면 구성(12단계 개편): 위 막대 · 왼쪽 도구 줄 · 장/레이어 탭 · 캔버스 · 속성 패널 · 상태 줄 */
   :root { --bg: #f4f3f0; --panel: #fbfaf8; --line: #e4e1dc; --line2: #ecebe7; --text: #23211e; --muted: #8a857d; --accent: #2d6cdf; --accent-bg: #e7effd; --r: 6px; }
@@ -140,6 +140,11 @@
   .tpl-acts { display: flex; gap: 4px; margin-top: 5px; }
   .tpl-acts button { font: inherit; font-size: 11px; padding: 2px 6px; border: 1px solid #cfccc6; background: #fff; border-radius: 3px; cursor: pointer; }
   .tpl-empty { grid-column: 1 / -1; color: #777; line-height: 1.7; padding: 16px 4px; }
+  .tpl-builtin { max-height: 38vh; }
+  .tpl-mine { max-height: 26vh; }
+  .tpl-desc { color: #888; font-size: 11px; line-height: 1.4; margin-top: 2px; min-height: 30px; }
+  .tpl-builtin .tpl-thumb { cursor: pointer; }
+  .modal.tpl > p { font-weight: 700; margin: 0 0 8px; }
   .modal-input { width: 100%; box-sizing: border-box; font: inherit; padding: 5px 7px; border: 1px solid #cfccc6; border-radius: 4px; margin: 0 0 12px; }
   /* ---------- 태블릿(손가락·펜) ---------- */
   body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; /* 두 번 톡 확대 끄기(캔버스는 touch-action: none) */ }

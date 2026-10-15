@@ -480,9 +480,9 @@ with sync_playwright() as p:
     fc.value.set_files(path)
     time.sleep(0.5)
     names = E("(async () => (await __TPL.listTemplates()).map((t) => [t.name, t.w, t.h]))()")
-    items = E("document.querySelectorAll('.tpl-item').length")
+    items = E("document.querySelectorAll('.tpl-mine .tpl-item').length")
     check(f'F8 템플릿 창: 파일로 내보내기({d.suggested_filename}) → 보관함 비우고 파일에서 가져오기 → 목록에 다시 나타남', d.suggested_filename == '표지.nabitpl' and names == [['표지', 800, 600]] and items == 1, names)
-    pg.click('.tpl-item [data-act=use]'); time.sleep(0.5)
+    pg.click('.tpl-mine .tpl-item [data-act=use]'); time.sleep(0.5)
     check('F9 템플릿 창의 "새 장으로" → 새 장(2장)', E("__nabi.app.project.pages.length") == 2 and E("T.V.page.w") == 800 and not E("document.querySelector('.modal-bg')"))
 
     check('Z 검증 전체 동안 페이지 오류 없음', not errors, errors)

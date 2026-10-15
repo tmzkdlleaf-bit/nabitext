@@ -7,6 +7,7 @@ import { clearMeasureCache } from '../src/measure.js';
 import { resetTextMeasure } from './render-el.js';
 import { fonts, fontStack } from '../src/fonts.js';
 import { fontInfo } from './font-info.js';
+import { GLOG_TEMPLATES, buildGlogPage, sketchSVG } from './glog-templates.js';
 import { exportPages, rasterize } from '../src/export.js';
 import * as platform from '../src/platform.js';
 import { PageView } from './page-view.js';
@@ -33,7 +34,7 @@ const $ = (id) => document.getElementById(id);
 fillIcons(); // 정적 HTML의 아이콘 자리 → SVG(다른 코드가 버튼을 찾기 전에)
 const APP_VERSION = '0.12.2';
 const AUTOSAVE_MS = 2000; // 마지막 변경 뒤 이만큼 조용하면 복구용 사본을 쓴다
-const DEFAULT_FONTS = ['Noto Sans KR', 'Noto Sans CJK KR', 'Noto Serif CJK KR', 'Malgun Gothic', 'sans-serif', 'serif', 'monospace'];
+const DEFAULT_FONTS = ['Noto Sans KR', 'Noto Serif KR', 'Noto Sans CJK KR', 'Noto Serif CJK KR', 'Malgun Gothic', 'sans-serif', 'serif', 'monospace'];
 
 let panelQueued = false;
 let thumbs = null; // 장 목록 미리보기(아래에서 만든다)
@@ -445,11 +446,55 @@ async function exportTemplateFile(rec) {
   const safe = rec.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim() || '템플릿';
   return platform.saveFiles([{ name: `${safe}.${TPL.TEMPLATE_EXT}`, blob: new Blob([rec.bytes], { type: 'application/zip' }) }], { project: safe });
 }
+// ---------- 기본 글로그 틀 ----------
+// 사진 자리 그림(연한 회색 + 안내 글). 크기별로 한 번만 만들어 에셋으로 둔다(바꿔 넣으면 저장에서 빠짐)
+const photoCache = new Map();
+async function photoPlaceholder(w, h) {
+  const key = `${Math.round(w)}x${Math.round(h)}`;
+  if (photoCache.has(key) && assets.ofUrl(photoCache.get(key))) return photoCache.get(key);
+  const W = Math.max(8, Math.round(w)), H = Math.max(8, Math.round(h));
+  const c = new OffscreenCanvas(W, H), x = c.getContext('2d');
+  x.fillStyle = '#dfe3ea'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(120,130,150,.18)'; x.lineWidth = 2;
+  for (let d = -H; d < W; d += 28) { x.beginPath(); x.moveTo(d, H); x.lineTo(d + H, 0); x.stroke(); }
+  x.fillStyle = '#6b7385'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = `600 ${Math.max(14, Math.min(34, W / 16))}px "Noto Sans KR", sans-serif`;
+  x.fillText('사진을 끌어다 놓으세요', W / 2, H / 2);
+  const a = await assets.add(await c.convertToBlob({ type: 'image/png' }), { name: '사진 자리.png' });
+  photoCache.set(key, a.url);
+  return a.url;
+}
+// 틀로 새 장(지금 장 뒤에). 되돌리기 한 번으로 취소
+async function insertGlog(id) {
+  const tpl = GLOG_TEMPLATES.find((t) => t.id === id);
+  if (!tpl) return null;
+  // build는 동기 → 사진 자리 크기를 먼저 모아 그림을 만든 뒤 다시 짓는다
+  const need = [];
+  tpl.build({ photo: (w, h) => { need.push([w, h]); return ''; } });
+  const urls = new Map();
+  for (const [w, h] of need) urls.set(`${w}x${h}`, await photoPlaceholder(w, h));
+  const page = buildGlogPage(tpl, { photo: (w, h) => urls.get(`${w}x${h}`) });
+  changePages((pages) => { pages.splice(pages.indexOf(app.current) + 1, 0, page); return { pages, current: page }; });
+  const n = need.length;
+  status(`"${tpl.name}" 틀로 새 장을 만들었습니다 · ${tpl.w}×${tpl.h}px${n ? ` · 사진 자리 ${n}개(주황 점선)에 사진을 끌어다 놓으세요` : ''}`);
+  return page;
+}
+app.insertGlog = insertGlog;
+
 // 템플릿 창
 async function openTemplates() {
-  const bg = modal(`<p>템플릿</p><div class="tpl-list"></div>
+  const bg = modal(`<p>기본 틀 (글로그)</p><div class="tpl-list tpl-builtin">${GLOG_TEMPLATES.map((t) => `<div class="tpl-item" data-glog="${esc(t.id)}">
+      <div class="tpl-thumb">${sketchSVG(t, 140, 110)}</div>
+      <div class="tpl-name" title="${esc(t.desc)}">${esc(t.name)}</div><div class="tpl-size">${t.w}×${t.h}px</div><div class="tpl-desc">${esc(t.desc)}</div>
+      <div class="tpl-acts"><button data-act="glog">새 장으로</button></div></div>`).join('')}</div>
+    <p>내 템플릿</p><div class="tpl-list tpl-mine"></div>
     <div class="modal-btns"><button data-v="close">닫기</button><button data-v="save">지금 장을 템플릿으로…</button><button data-v="import">파일에서 가져오기…</button></div>`, 'tpl');
-  const listEl = bg.querySelector('.tpl-list');
+  const listEl = bg.querySelector('.tpl-mine');
+  bg.querySelector('.tpl-builtin').addEventListener('click', async (e) => {
+    const id = e.target.closest('[data-glog]')?.dataset.glog;
+    if (!id || !e.target.closest('[data-act=glog], .tpl-thumb')) return;
+    close(); await insertGlog(id);
+  });
   const close = () => { bg.remove(); view.viewport.focus({ preventScroll: true }); };
   const draw = async () => {
     const list = await TPL.listTemplates();

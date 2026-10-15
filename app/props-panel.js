@@ -12,6 +12,7 @@ import { isMaster, TOKENS } from './master.js';
 import { icon } from './icons.js';
 import { fontField, closeFontPicker } from './font-picker.js';
 import { fontStack } from '../src/fonts.js';
+import { SIZE_PRESETS, matchSize, sizeOf } from './sizes.js';
 
 const ICON_TPL = new Map();
 // 아이콘 DOM(같은 모양은 한 번 만들어 복제)
@@ -309,6 +310,11 @@ export class PropsPanel {
     const v = this.view;
     this.head('layout-template', isMaster(v.page) ? '공통 장' : '장', `${v.page.w} × ${v.page.h}px`);
     this.section('장');
+    // 크기 고르기(용지·SNS). 지금 방향(가로·세로)을 지킨다. 정사각에서 고르면 그 크기 본래 방향
+    this.row(this.select('크기', [['custom', '직접 입력'], ...SIZE_PRESETS.map((p) => [p.id, `${p.group} · ${p.name}`])],
+      () => matchSize(v.page.w, v.page.h)?.preset.id || 'custom',
+      (id) => { if (id === 'custom') return; const { w, h } = v.page; const sz = sizeOf(id, w > h ? true : w < h ? false : null); if (sz) v.setPageProps(sz); }));
+    this.row(this.button('가로·세로 바꾸기', () => v.setPageProps({ w: v.page.h, h: v.page.w }), '장의 너비와 높이를 맞바꿉니다(요소는 그 자리에)'));
     this.row(
       this.num('너비', () => v.page.w, (w) => v.setPageProps({ w: Math.max(1, Math.round(w)) }), { min: 1 }),
       this.num('높이', () => v.page.h, (h) => v.setPageProps({ h: Math.max(1, Math.round(h)) }), { min: 1 }),
