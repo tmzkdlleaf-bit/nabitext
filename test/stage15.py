@@ -134,6 +134,10 @@ with sync_playwright() as p:
     check('G8 틀로 만든 장들 저장 → 다시 열기: 장 이름·크기·요소 수 같음', before == after, [before[:200], after[:200]])
     b.close()
 
+# Windows에서 git이 줄 끝을 CRLF로 바꿔 받아도 CSP 해시가 같아야 함(다르면 import map이 막혀 화면이 비어 버림)
+import subprocess as _sp
+_h = _sp.run(['node', '-e', "const {cspFor}=require(process.argv[1]); const fs=require('fs'); const t=fs.readFileSync(process.argv[2],'utf8'); process.stdout.write(String(cspFor(t)===cspFor(t.replace(/\\r?\\n/g,'\\r\\n'))))", os.path.join(ROOT, 'electron', 'csp.js'), os.path.join(ROOT, 'index.html')], capture_output=True, text=True).stdout
+check('W1 index.html 줄 끝이 CRLF(Windows)여도 CSP의 import map 해시가 같음', _h == 'true', _h)
 fails = [r for r in results if not r[1]]
 for n, ok, d in results: print(('PASS ' if ok else 'FAIL ') + n + ('' if ok else '\n     ' + json.dumps(d, ensure_ascii=False, default=str)[:1500]))
 print('page errors:', errors[:8])

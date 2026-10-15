@@ -1,0 +1,10 @@
+# 줄 끝을 늘 LF로(Windows에서 받아도). index.html 안 import map의 해시(CSP)가 줄 끝에 따라 달라지기 때문
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.png binary
+*.ico binary
+*.otf binary
+*.ttf binary
+*.woff binary
+*.woff2 binary

@@ -5,6 +5,8 @@
 const crypto = require('node:crypto');
 
 function cspFor(html) {
+  // 브라우저는 줄바꿈을 \n으로 바꾼 뒤 해시를 잰다(HTML 규칙). Windows에서 git이 줄 끝을 \r\n으로 바꿔 받은 파일도 같은 해시가 나오게
+  html = html.replace(/\r\n?/g, '\n');
   const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
     .map((m) => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
   return [
