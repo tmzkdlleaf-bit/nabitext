@@ -7,7 +7,7 @@ import { clearMeasureCache } from '../src/measure.js';
 import { resetTextMeasure } from './render-el.js';
 import { fonts, fontStack } from '../src/fonts.js';
 import { fontInfo } from './font-info.js';
-import { GLOG_TEMPLATES, buildGlogPage, sketchSVG } from './glog-templates.js';
+import { GLOG_TEMPLATES, PHOTO_TEMPLATES, ALL_TEMPLATES, buildGlogPage, sketchSVG } from './glog-templates.js';
 import { exportPages, rasterize } from '../src/export.js';
 import * as platform from '../src/platform.js';
 import { PageView } from './page-view.js';
@@ -464,18 +464,32 @@ async function photoPlaceholder(w, h) {
   photoCache.set(key, a.url);
   return a.url;
 }
+// 실루엣 틀의 기본 모양(머리 + 어깨, 투명 배경). 글상자 모양 → 이미지 바꾸기로 내 그림(투명 배경 PNG)을 넣으면 그 모양이 된다
+async function bustPlaceholder(w, h) {
+  const key = `bust-${Math.round(w)}x${Math.round(h)}`;
+  if (photoCache.has(key) && assets.ofUrl(photoCache.get(key))) return photoCache.get(key);
+  const W = Math.max(8, Math.round(w)), H = Math.max(8, Math.round(h));
+  const c = new OffscreenCanvas(W, H), x = c.getContext('2d');
+  x.fillStyle = '#6b6258';
+  x.beginPath(); x.ellipse(W / 2, H * 0.24, W * 0.21, H * 0.19, 0, 0, Math.PI * 2); x.fill();          // 머리
+  x.beginPath(); x.moveTo(W * 0.02, H); x.bezierCurveTo(W * 0.04, H * 0.5, W * 0.96, H * 0.5, W * 0.98, H); x.closePath(); x.fill(); // 어깨
+  x.fillRect(W * 0.38, H * 0.36, W * 0.24, H * 0.26);                                                     // 목
+  const a = await assets.add(await c.convertToBlob({ type: 'image/png' }), { name: '실루엣.png' });
+  photoCache.set(key, a.url);
+  return a.url;
+}
 // 틀로 새 장(지금 장 뒤에). 되돌리기 한 번으로 취소
 async function insertGlog(id) {
-  const tpl = GLOG_TEMPLATES.find((t) => t.id === id);
+  const tpl = ALL_TEMPLATES.find((t) => t.id === id);
   if (!tpl) return null;
-  // build는 동기 → 사진 자리 크기를 먼저 모아 그림을 만든 뒤 다시 짓는다
+  // build는 동기 → 사진 자리·실루엣 크기를 먼저 모아 그림을 만든 뒤 다시 짓는다
   const need = [];
-  tpl.build({ photo: (w, h) => { need.push([w, h]); return ''; } });
+  tpl.build({ photo: (w, h) => { need.push(['photo', w, h]); return ''; }, bust: (w, h) => { need.push(['bust', w, h]); return ''; } });
   const urls = new Map();
-  for (const [w, h] of need) urls.set(`${w}x${h}`, await photoPlaceholder(w, h));
-  const page = buildGlogPage(tpl, { photo: (w, h) => urls.get(`${w}x${h}`) });
+  for (const [k, w, h] of need) urls.set(`${k}${w}x${h}`, await (k === 'bust' ? bustPlaceholder(w, h) : photoPlaceholder(w, h)));
+  const page = buildGlogPage(tpl, { photo: (w, h) => urls.get(`photo${w}x${h}`), bust: (w, h) => urls.get(`bust${w}x${h}`) });
   changePages((pages) => { pages.splice(pages.indexOf(app.current) + 1, 0, page); return { pages, current: page }; });
-  const n = need.length;
+  const n = need.filter((x) => x[0] === 'photo').length;
   status(`"${tpl.name}" 틀로 새 장을 만들었습니다 · ${tpl.w}×${tpl.h}px${n ? ` · 사진 자리 ${n}개(주황 점선)에 사진을 끌어다 놓으세요` : ''}`);
   return page;
 }
@@ -483,13 +497,23 @@ app.insertGlog = insertGlog;
 
 // 템플릿 창
 async function openTemplates() {
-  const bg = modal(`<p>기본 틀 (글로그)</p><div class="tpl-list tpl-builtin">${GLOG_TEMPLATES.map((t) => `<div class="tpl-item" data-glog="${esc(t.id)}">
+  const card = (t) => `<div class="tpl-item" data-glog="${esc(t.id)}">
       <div class="tpl-thumb">${sketchSVG(t, 140, 110)}</div>
       <div class="tpl-name" title="${esc(t.desc)}">${esc(t.name)}</div><div class="tpl-size">${t.w}×${t.h}px</div><div class="tpl-desc">${esc(t.desc)}</div>
-      <div class="tpl-acts"><button data-act="glog">새 장으로</button></div></div>`).join('')}</div>
+      <div class="tpl-acts"><button data-act="glog">새 장으로</button></div></div>`;
+  const bg = modal(`<div class="tpl-tabs" role="tablist"><button data-sec="text" aria-selected="true">글 위주 틀 ${GLOG_TEMPLATES.length}</button><button data-sec="photo" aria-selected="false">사진이 들어가는 틀 ${PHOTO_TEMPLATES.length}</button></div>
+    <div class="tpl-builtin"><div class="tpl-list" data-sec="text">${GLOG_TEMPLATES.map(card).join('')}</div>
+    <div class="tpl-list" data-sec="photo" hidden>${PHOTO_TEMPLATES.map(card).join('')}</div></div>
     <p>내 템플릿</p><div class="tpl-list tpl-mine"></div>
     <div class="modal-btns"><button data-v="close">닫기</button><button data-v="save">지금 장을 템플릿으로…</button><button data-v="import">파일에서 가져오기…</button></div>`, 'tpl');
   const listEl = bg.querySelector('.tpl-mine');
+  // 기본 틀 탭(글 위주 / 사진이 들어가는 틀)
+  bg.querySelector('.tpl-tabs').addEventListener('click', (e) => {
+    const sec = e.target.closest('[data-sec]')?.dataset.sec;
+    if (!sec) return;
+    for (const b of bg.querySelectorAll('.tpl-tabs [data-sec]')) b.setAttribute('aria-selected', String(b.dataset.sec === sec));
+    for (const l of bg.querySelectorAll('.tpl-builtin .tpl-list')) l.hidden = l.dataset.sec !== sec;
+  });
   bg.querySelector('.tpl-builtin').addEventListener('click', async (e) => {
     const id = e.target.closest('[data-glog]')?.dataset.glog;
     if (!id || !e.target.closest('[data-act=glog], .tpl-thumb')) return;

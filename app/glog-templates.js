@@ -230,7 +230,127 @@ export const GLOG_TEMPLATES = [
   },
 ];
 
-// 틀 → 새 장(요소 id는 모두 새로). ctx: { photo(w, h) }
+
+// ---------- 사진이 들어가는 틀 ----------
+// 원 경로(요소 안 좌표): 지름 w·h 상자에 꼭 맞는 원
+const circleD = (x, y, w, h) => { const rx = w / 2, ry = h / 2, cx = x + rx, cy = y + ry; return `M${cx + rx} ${cy}A${rx} ${ry} 0 1 1 ${cx - rx} ${cy}A${rx} ${ry} 0 1 1 ${cx + rx} ${cy}Z`; };
+const rectPathD = (x, y, w, h) => `M${x} ${y}L${x + w} ${y}L${x + w} ${y + h}L${x} ${y + h}Z`;
+// 상자를 (cx, cy) 둘레로 deg만큼 돌린 자리(요소는 자기 가운데 기준으로 돌므로 가운데를 옮긴다)
+function rotAround(box, cx, cy, deg) {
+  const a = deg * Math.PI / 180, bx = box.x + box.w / 2 - cx, by = box.y + box.h / 2 - cy;
+  const nx = cx + bx * Math.cos(a) - by * Math.sin(a), ny = cy + bx * Math.sin(a) + by * Math.cos(a);
+  return { ...box, x: Math.round(nx - box.w / 2), y: Math.round(ny - box.h / 2), rotation: deg };
+}
+
+export const PHOTO_TEMPLATES = [
+  {
+    id: 'overlay', name: '사진 위 글', desc: '사진을 장 전체에 깔고 아래쪽을 어둡게, 그 위에 흰 글', w: 1080, h: 1350,
+    build: (ctx) => ({
+      background: '#111111',
+      elements: [
+        photo(ctx, '배경 사진', { x: 0, y: 0, w: 1080, h: 1350 }),
+        rect('어둡게', { x: 0, y: 560, w: 1080, h: 790 }, { type: 'linear', angle: 90, stops: [{ o: 0, c: '#00000000' }, { o: 0.45, c: '#000000a6' }, { o: 1, c: '#000000e6' }] }),
+        text('제목', { x: 90, y: 860, w: 900, h: 80 }, { fontFamily: SERIF, fontSize: 48, fontWeight: 700, color: '#ffffff', lineHeight: 1.3 }, doc(P('제목'))),
+        text('본문', { x: 90, y: 960, w: 900, h: 300 }, { fontSize: 27, color: '#ecebe8', lineHeight: 1.75 }, doc(P(BODY)), { autoShrink: true, minScale: 0.6 }),
+      ],
+    }),
+  },
+  {
+    id: 'wrap', name: '글이 사진을 감싸기', desc: '본문 한쪽에 사진, 글이 사진 둘레로 흘러감(사진을 옮기면 자리도 같이 맞추기)', w: 1080, h: 1350,
+    build: (ctx) => {
+      const tb = { x: 90, y: 230, w: 900, h: 1030 }, ph = { x: 90, y: 230, w: 400, h: 520 };
+      return {
+        background: '#fbfaf7',
+        elements: [
+          text('제목', { x: 90, y: 100, w: 900, h: 80 }, { fontFamily: SERIF, fontSize: 46, color: '#24211d', lineHeight: 1.3 }, doc(P('제목'))),
+          photo(ctx, '사진 자리', ph),
+          text('본문(사진 둘레)', tb, { fontFamily: SERIF, fontSize: 25, color: '#2e2a25', lineHeight: 1.8 },
+            doc(P(LONG, { align: 'justify', spacing: 14 }), P(LONG, { align: 'justify', spacing: 14 }), P(BODY, { align: 'justify' })),
+            { area: { kind: 'path', d: rectPathD(ph.x - tb.x, ph.y - tb.y, ph.w, ph.h), pw: tb.w, ph: tb.h, invert: true }, padding: 28, autoShrink: true, minScale: 0.6 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'round', name: '둥근 사진 + 둘레 글', desc: '가운데 둥근 사진, 글이 원의 양옆으로 흘러감', w: 1080, h: 1350,
+    build: (ctx) => {
+      const tb = { x: 80, y: 200, w: 920, h: 1070 }, c = { x: 300, y: 380, w: 480, h: 480 };
+      return {
+        background: '#f4efe9',
+        elements: [
+          text('제목', { x: 80, y: 90, w: 920, h: 80 }, { fontFamily: SERIF, fontSize: 44, color: '#3a2f28', lineHeight: 1.3 }, doc(P('제목', { align: 'center' }))),
+          photo(ctx, '둥근 사진 자리', c, { mask: { kind: 'shape', d: circleD(0, 0, c.w, c.h), pw: c.w, ph: c.h } }),
+          text('본문(원 둘레)', tb, { fontFamily: SERIF, fontSize: 24, color: '#3a2f28', lineHeight: 1.75 },
+            doc(P(LONG, { spacing: 12 }), P(LONG, { spacing: 12 }), P(LONG)),
+            { area: { kind: 'path', d: circleD(c.x - tb.x, c.y - tb.y, c.w, c.h), pw: tb.w, ph: tb.h, invert: true, minWidth: 60 }, padding: 26, autoShrink: true, minScale: 0.6 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'split', name: '사진 + 글 반반', desc: '왼쪽 절반 사진, 오른쪽 제목·본문(잡지 펼침면처럼)', w: 1350, h: 1080,
+    build: (ctx) => ({
+      background: '#ffffff',
+      elements: [
+        photo(ctx, '사진 자리', { x: 0, y: 0, w: 675, h: 1080 }),
+        text('작은 제목', { x: 755, y: 120, w: 520, h: 40 }, { fontSize: 20, color: '#9a8f80', letterSpacing: 4 }, doc(P('CHAPTER 01'))),
+        text('제목', { x: 755, y: 170, w: 520, h: 140 }, { fontFamily: SERIF, fontSize: 50, color: '#1e1c19', lineHeight: 1.3 }, doc(P('제목'))),
+        hr('구분선', 755, 330, 60, '#1e1c19', 3),
+        text('본문', { x: 755, y: 380, w: 520, h: 600 }, { fontFamily: SERIF, fontSize: 24, color: '#33302b', lineHeight: 1.85 }, doc(P(LONG, { align: 'justify', spacing: 14 }), P(BODY, { align: 'justify' })), { autoShrink: true, minScale: 0.6 }),
+      ],
+    }),
+  },
+  {
+    id: 'grid', name: '사진 네 장 + 글', desc: '위에 사진 2×2, 아래 짧은 글(장면 모음·세션 정리)', w: 1080, h: 1350,
+    build: (ctx) => {
+      const g = 12, s = (1080 - 80 * 2 - g) / 2;
+      const cells = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j], k) => photo(ctx, `사진 ${k + 1}`, { x: 80 + i * (s + g), y: 80 + j * (s + g), w: s, h: s }));
+      return {
+        background: '#f7f6f3',
+        elements: [
+          ...cells,
+          text('제목', { x: 80, y: 80 + 2 * s + g + 40, w: 920, h: 64 }, { fontSize: 38, fontWeight: 700, color: '#222', lineHeight: 1.3 }, doc(P('제목'))),
+          text('본문', { x: 80, y: 80 + 2 * s + g + 110, w: 920, h: 1350 - (80 + 2 * s + g + 110) - 70 }, { fontSize: 25, color: '#444', lineHeight: 1.7 }, doc(P(BODY)), { autoShrink: true, minScale: 0.6 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'polaroid', name: '폴라로이드', desc: '흰 테두리 사진을 살짝 기울이고 아래 손글씨 한 줄, 그 밑에 글', w: 1080, h: 1350,
+    build: (ctx) => {
+      const deg = -4, frame = { x: 230, y: 90, w: 620, h: 740 }, cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2;
+      return {
+        background: '#e9e4dc',
+        elements: [
+          group('폴라로이드', [
+            rect('그림자', rotAround({ x: frame.x + 10, y: frame.y + 14, w: frame.w, h: frame.h }, cx + 10, cy + 14, deg), '#00000026'),
+            rect('테두리', rotAround(frame, cx, cy, deg), '#ffffff'),
+            photo(ctx, '사진 자리', rotAround({ x: frame.x + 36, y: frame.y + 36, w: frame.w - 72, h: frame.w - 72 }, cx, cy, deg)),
+            text('손글씨', rotAround({ x: frame.x + 36, y: frame.y + frame.w - 20, w: frame.w - 72, h: 100 }, cx, cy, deg), { fontSize: 34, color: '#4a4a4a', lineHeight: 1.4 }, doc(P('사진 아래 한 줄', { align: 'center' }))),
+          ]),
+          text('본문', { x: 110, y: 900, w: 860, h: 370 }, { fontSize: 26, color: '#3d3a35', lineHeight: 1.75 }, doc(P(BODY, { align: 'center' })), { autoShrink: true, minScale: 0.6 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'silhouette', name: '실루엣 안에 글', desc: '캐릭터 모양(투명 배경 그림) 안을 글로 채움. 글상자 모양 → 이미지 바꾸기로 내 그림을 넣기', w: 1080, h: 1350,
+    build: (ctx) => ({
+      background: '#fdfbf7',
+      elements: [
+        text('실루엣 글', { x: 140, y: 90, w: 800, h: 1080 }, { fontFamily: SERIF, fontSize: 22, color: '#2f2a24', lineHeight: 1.45 },
+          doc(...Array.from({ length: 6 }, () => P(LONG, { align: 'justify', spacing: 6 }))),
+          { area: { kind: 'image', src: ctx.bust(800, 1080), mode: 'alpha', threshold: 128, show: true, opacity: 0.12, fit: 'contain', minWidth: 30 }, padding: 6, autoShrink: true, minScale: 0.5 }),
+        text('제목', { x: 140, y: 1200, w: 800, h: 70 }, { fontFamily: SERIF, fontSize: 36, color: '#2f2a24', lineHeight: 1.3 }, doc(P('제목', { align: 'center' }))),
+      ],
+    }),
+  },
+];
+
+// 목록: 글 위주 틀 + 사진이 들어가는 틀
+export const ALL_TEMPLATES = [...GLOG_TEMPLATES, ...PHOTO_TEMPLATES];
+
+// 틀 → 새 장(요소 id는 모두 새로). ctx: { photo(w, h), bust(w, h) } — 사진 자리·실루엣 그림 주소
 export function buildGlogPage(tpl, ctx) {
   const { background, elements } = tpl.build(ctx);
   return { ...M.newPage({ w: tpl.w, h: tpl.h, background }), name: tpl.name, elements };
@@ -238,24 +358,34 @@ export function buildGlogPage(tpl, ctx) {
 
 // 목록에 보일 간단한 그림(요소 상자를 줄여 그린 것). 글상자는 회색 줄, 사진 자리는 빗금
 export function sketchSVG(tpl, W = 150, H = 150) {
-  const fake = (w, h) => '';
-  const { background, elements } = tpl.build({ photo: fake });
+  const fake = () => '';
+  const { background, elements } = tpl.build({ photo: fake, bust: fake });
   const k = Math.min(W / tpl.w, H / tpl.h), ox = (W - tpl.w * k) / 2, oy = (H - tpl.h * k) / 2;
   const R = (v) => Math.round(v * k * 10) / 10;
   let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><g transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})">`;
   s += `<rect width="${R(tpl.w)}" height="${R(tpl.h)}" fill="${background}" stroke="#d0ccc4"/>`;
-  const draw = (n) => {
-    if (n.type === 'group') return n.children.forEach(draw);
-    const x = R(n.x), y = R(n.y), w = Math.max(1, R(n.w)), h = Math.max(1, R(n.h));
-    if (n.type === 'shape') s += n.shape === 'ellipse' ? `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${n.fill}"/>` : `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${R(n.radius || 0)}" fill="${n.fill}"${n.strokeWidth ? ` stroke="${n.stroke}" stroke-width="0.6"` : ''}/>`;
-    else if (n.type === 'image') s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#c9ced8"/><path d="M${x} ${y + h}L${x + w} ${y}" stroke="#aab1bd" stroke-width="0.8"/>`;
+  let clipN = 0;
+  const fillOf = (f) => (typeof f === 'string' ? f : '#00000055');
+  const rot = (n, x, y, w, h) => (n.rotation ? ` transform="rotate(${n.rotation} ${x + w / 2} ${y + h / 2})"` : '');
+  const box = (n) => ({ x: R(n.x), y: R(n.y), w: Math.max(1, R(n.w)), h: Math.max(1, R(n.h)) });
+  const flat = [];
+  const collect = (n) => (n.type === 'group' ? n.children.forEach(collect) : flat.push(n));
+  elements.forEach(collect);
+  // 모양이 있는 글상자(사진을 감싸는 글)는 먼저 그려 사진이 그 위에 보이게. 나머지는 놓인 순서대로
+  for (const n of [...flat.filter((n) => n.type === 'text' && n.area), ...flat.filter((n) => !(n.type === 'text' && n.area))]) {
+    const { x, y, w, h } = box(n);
+    if (n.type === 'shape') s += n.shape === 'ellipse' ? `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fillOf(n.fill)}"/>` : `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${R(n.radius || 0)}" fill="${fillOf(n.fill)}"${n.strokeWidth ? ` stroke="${n.stroke}" stroke-width="0.6"` : ''}${rot(n, x, y, w, h)}/>`;
+    else if (n.type === 'image') s += n.mask ? `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="#c9ced8"/>` : `<g${rot(n, x, y, w, h)}><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#c9ced8"/><path d="M${x} ${y + h}L${x + w} ${y}" stroke="#aab1bd" stroke-width="0.8"/></g>`;
     else if (n.type === 'text') {
       const fs = Math.max(1.2, (n.style?.fontSize || 32) * k), lh = fs * (n.style?.lineHeight || 1.6);
       const c = n.style?.color || '#333';
-      const rows = Math.max(1, Math.min(Math.floor(h / lh), 40));
+      const rows = Math.max(1, Math.min(Math.floor(h / lh), 60));
+      let clip = '';
+      if (n.area?.kind === 'image') { const id = `c${clipN++}`; s += `<clipPath id="${id}"><ellipse cx="${x + w / 2}" cy="${y + h * 0.2}" rx="${w * 0.22}" ry="${h * 0.18}"/><path d="M${x + w * 0.1} ${y + h}C${x + w * 0.1} ${y + h * 0.45} ${x + w * 0.9} ${y + h * 0.45} ${x + w * 0.9} ${y + h}Z"/></clipPath>`; clip = ` clip-path="url(#${id})"`; }
+      s += `<g${clip}${rot(n, x, y, w, h)}>`;
       for (let i = 0; i < rows; i++) s += `<rect x="${x}" y="${(y + i * lh + (lh - fs) / 2).toFixed(1)}" width="${(w * (i === rows - 1 && rows > 1 ? 0.6 : 1)).toFixed(1)}" height="${Math.max(0.8, fs * 0.55).toFixed(1)}" fill="${c}" opacity=".55"/>`;
+      s += '</g>';
     }
-  };
-  elements.forEach(draw);
+  }
   return s + '</g></svg>';
 }
