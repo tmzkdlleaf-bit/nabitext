@@ -1,7 +1,7 @@
 {
   "name": "nabitext",
   "productName": "나비글쓰기",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "description": "글과 이미지를 결합한 이미지 제작 편집기",
   "author": "Nabi",
   "private": true,

@@ -15,7 +15,8 @@ export const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 
 export const DEFAULTS = {
   page: { w: 1080, h: 1080, background: '#ffffff' },
-  text: { w: 360, h: 120, padding: 0, style: { fontSize: 32 } },
+  // paraSpacing: 문단 사이 추가 간격(px). 새 글상자는 0 = Enter도 줄 간격만큼만. 없으면(예전 글상자) 8
+  text: { w: 360, h: 120, padding: 0, paraSpacing: 0, style: { fontSize: 32 } },
   shape: { fill: '#d9d4ff', stroke: '#5b4fc4', strokeWidth: 0, radius: 0, sides: 6, inner: 0.5 },
 };
 

@@ -134,6 +134,31 @@ with sync_playwright() as p:
     check('G8 틀로 만든 장들 저장 → 다시 열기: 장 이름·크기·요소 수 같음', before == after, [before[:200], after[:200]])
     b.close()
 
+# ============ P. 문단 간격(Enter) ============
+def gap_run():
+    with sync_playwright() as p:
+        b = p.chromium.launch(); pg = b.new_page(viewport={'width': 1600, 'height': 1000})
+        pg.route('**/fonts.googleapis.com/**', lambda r: r.abort())
+        pg.goto(ORIGIN + '/index.html'); pg.wait_for_function('window.__nabi && window.__nabi.ready', timeout=30000); time.sleep(0.3)
+        if pg.evaluate("!!document.querySelector('.modal-bg')"): pg.click('.modal-bg [data-v=discard]')
+        E = lambda js, arg=None: pg.evaluate(js, arg) if arg is not None else pg.evaluate(js)
+        ys = lambda id_: E(f"(() => {{ const V = __nabi.view; return V.editorOf(V.node('{id_}')).results[0].lines.map((l) => Math.round(l.y)); }})()")
+        mk = lambda extra: E("""(extra) => { const M = __nabi.M, V = __nabi.view; const n = M.makeElement('text', { x: 50, y: 50, w: 600, h: 400, doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '첫 문단' }] }, { type: 'paragraph', content: [{ type: 'text', text: '둘째 문단' }] }] }, ...extra });
+          if (extra.__old) { delete n.paraSpacing; delete n.__old; } V.change('create', () => V.page.elements.push(n)); V.select([n.id]); __nabi.flush(); return n.id; }""", extra)
+        a = mk({}); time.sleep(0.2); ya = ys(a)
+        old = mk({'__old': True}); time.sleep(0.2); yo = ys(old)
+        E(f"__nabi.view.select(['{a}']); __nabi.flush()")
+        f = E("(() => { const i = document.querySelector('#props [data-field=\"문단 간격\"]'); i.value = '20'; i.dispatchEvent(new Event('change')); __nabi.flush(); return true; })()"); time.sleep(0.3)
+        y20 = ys(a)
+        E("__nabi.history.undo()"); time.sleep(0.2)
+        yu = ys(a)
+        b.close()
+        return ya, yo, y20, yu
+ya, yo, y20, yu = gap_run()
+check('P1 새 글상자: Enter로 나눈 문단 사이 = 줄 간격(32px × 1.6 = 51px, 추가 간격 없음)', ya[1] - ya[0] == 51, ya)
+check('P2 예전 글상자(문단 간격 값 없음)는 예전대로 8px 더 띄움(열어도 배치가 바뀌지 않음)', yo[1] - yo[0] == 59, yo)
+check('P3 속성 "문단 간격" 20 → 문단 사이 71px, 되돌리면 51px', y20[1] - y20[0] == 71 and yu[1] - yu[0] == 51, [y20, yu])
+
 # Windows에서 git이 줄 끝을 CRLF로 바꿔 받아도 CSP 해시가 같아야 함(다르면 import map이 막혀 화면이 비어 버림)
 import subprocess as _sp
 _h = _sp.run(['node', '-e', "const {cspFor}=require(process.argv[1]); const fs=require('fs'); const t=fs.readFileSync(process.argv[2],'utf8'); process.stdout.write(String(cspFor(t)===cspFor(t.replace(/\\r?\\n/g,'\\r\\n'))))", os.path.join(ROOT, 'electron', 'csp.js'), os.path.join(ROOT, 'index.html')], capture_output=True, text=True).stdout

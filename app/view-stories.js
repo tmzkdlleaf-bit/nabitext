@@ -26,7 +26,7 @@ class StoryMethods {
     const specs = list.map((n) => {
       const sp = textFrame(n, this.images);
       // 글자 기본값·자동 축소는 첫 글상자 것을 모든 글상자에 쓴다(한 이야기)
-      sp.frame = { ...sp.frame, style: head.style || {}, presets: this.presets, autoShrink: !!head.autoShrink, minScale: head.minScale ?? 0.5 };
+      sp.frame = { ...sp.frame, style: head.style || {}, paragraphSpacing: Math.max(0, Number.isFinite(+head.paraSpacing) ? +head.paraSpacing : 8), presets: this.presets, autoShrink: !!head.autoShrink, minScale: head.minScale ?? 0.5 };
       return sp;
     });
     const built = specs.map((sp, i) => {
@@ -36,7 +36,7 @@ class StoryMethods {
       if (!c || c.key !== rk) { c = { key: rk, built: buildRegion(sp.frame.w, sp.frame.h, sp.frame.source, sp.opts) }; this.regions.set(n.id, c); }
       return c.built;
     });
-    const key = JSON.stringify([list.map((n, i) => [n.id, this.regions.get(n.id).key]), specs[0].frame.style, head.autoShrink, head.minScale, this.presetsKey]);
+    const key = JSON.stringify([list.map((n, i) => [n.id, this.regions.get(n.id).key]), specs[0].frame.style, specs[0].frame.paragraphSpacing, head.autoShrink, head.minScale, this.presetsKey]);
     ed.members = list.map((n) => n.id);
     ed.memberPages = pages;
     if (ed._key !== key) {

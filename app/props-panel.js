@@ -356,6 +356,9 @@ export class PropsPanel {
       this.num('행간', () => this.markValue('lineHeight', (a) => a.value, (ed) => this.frameStyle(ed, 'lineHeight')), (s) => this.setMark('lineHeight', { value: Math.max(0.5, s) }), { step: 0.1 }),
       this.num('자간', () => this.markValue('spacing', (a) => a.value, () => 0), (s) => this.setMark('spacing', s ? { value: s } : null)),
     );
+    // 문단 간격: Enter로 나눈 문단 사이에 더 띄우는 거리(글상자 전체, 이어진 글상자는 첫 글상자 값). 0이면 Enter = 줄 간격만큼
+    const heads = () => { const v2 = this.view; return [...new Set(this.textTargets().nodes.map((n) => { const ed = v2.editorOf(n); return v2.node(ed?.members?.[0]) || n; }))]; };
+    this.row(this.num('문단 간격', () => same(heads().map((n) => (Number.isFinite(+n.paraSpacing) ? +n.paraSpacing : 8))), (s) => this.view.setProps({ paraSpacing: Math.max(0, s) }, heads().map((n) => n.id)), { suffix: 'px', min: 0 }));
     const alignOf = () => { const { eds, all } = this.textTargets(); return same(eds.map((ed) => ed.paragraphAttr('align', all) ?? 'left')); };
     this.row(
       this.seg(...[['bold', 'B', '굵게'], ['italic', 'I', '기울임'], ['underline', 'U', '밑줄'], ['strike', 'S', '취소선']].map(([m, t, title]) =>

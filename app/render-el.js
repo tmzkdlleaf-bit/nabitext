@@ -223,7 +223,7 @@ export function contentKey(n) {
 export function textFrame(n, images) {
   const w = Math.max(1, Math.round(n.w)), h = Math.max(1, Math.round(n.h));
   const a = n.area || { kind: 'rect' };
-  const base = { id: n.id, w, h, background: 'transparent', style: n.style || {}, paragraphSpacing: 8, minWidth: Math.max(1, num(a.minWidth, 8)) };
+  const base = { id: n.id, w, h, background: 'transparent', style: n.style || {}, paragraphSpacing: Math.max(0, num(n.paraSpacing, 8)), minWidth: Math.max(1, num(a.minWidth, 8)) };
   const opts = { offset: num(n.padding), smooth: Math.max(0, num(a.smooth)), invert: !!a.invert };
   if (a.kind === 'ellipse') return { frame: { ...base, source: { kind: 'path', d: Pth.ellipseD(w / 2, h / 2, w / 2, h / 2) } }, opts };
   if (a.kind === 'donut') return { frame: { ...base, source: { kind: 'path', d: Pth.donutD(w, h, Math.max(0.05, Math.min(0.95, num(a.inner, 0.45)))) } }, opts };
