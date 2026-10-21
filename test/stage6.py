@@ -325,8 +325,9 @@ with sync_playwright() as p:
     hid = E(f"T.V.nodes.get('{ids[2]}').style.display")
     click(E("T.C(450, 150)")); hsel = E("T.V.selection")
     exp_ids = E("(() => { const el = T.V.exportPage().render(); return el.children.length; })()")
-    check('F7 Ctrl+Shift+L 잠금 → 클릭·범위 선택에서 제외 / Ctrl+Shift+H 숨김 → 화면·클릭·출력에서 제외',
-          ids[3] not in lk and ids[3] not in lk2 and hid == 'none' and ids[2] not in hsel and exp_ids == len(E("T.ids()")) - 1, {'lk': lk, 'lk2': lk2, 'hid': hid, 'exp': exp_ids})
+    # 0.18: 잠긴 요소도 눌러서 고를 수는 있다(움직이지 않음, 자물쇠 단추로 풀기). 범위 선택에서는 그대로 빠진다
+    check('F7 Ctrl+Shift+L 잠금 → 클릭하면 고르기만(0.18), 범위 선택에서 제외 / Ctrl+Shift+H 숨김 → 화면·클릭·출력에서 제외',
+          lk == [ids[3]] and ids[3] not in lk2 and hid == 'none' and ids[2] not in hsel and exp_ids == len(E("T.ids()")) - 1, {'lk': lk, 'lk2': lk2, 'hid': hid, 'exp': exp_ids})
 
     # ============ G. 정렬·분배 ============
     E("T.reset()")
