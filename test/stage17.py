@@ -169,6 +169,21 @@ with sync_playwright() as p:
     tid2 = E("__nabi.view.page.elements.find((n) => n.type === 'text').id")
     check('W10 저장 → 다시 열기: 피해 가기 설정 유지, 글도 그대로 피함', sum(1 for n in pj['pages'][0]['elements'] if n.get('wrap')) == 2 and E(f"T.overlap('{tid2}', {{ x: 470, y: 420, w: 60, h: 60 }})") == 0, [n.get('wrap') for n in pj['pages'][0]['elements']])
 
+    # ============ P. 문단 간격(0.18.1): 문단마다 따로 정한 간격(템플릿 글)도 칸에서 바꿈 ============
+    E("T.reset()")
+    pid = E("""T.add('text', { x: 100, y: 100, w: 600, h: 400 }, { style: { fontSize: 32, lineHeight: 1.6 }, doc: { type: 'doc', content: [
+      { type: 'paragraph', attrs: { spacing: 30 }, content: [{ type: 'text', text: '첫 문단' }] }, { type: 'paragraph', attrs: { spacing: 30 }, content: [{ type: 'text', text: '둘째 문단' }] }] } })""")
+    ys = lambda: E(f"__nabi.view.editorOf(__nabi.view.node('{pid}')).results[0].lines.map((l) => Math.round(l.y))")
+    E(f"__nabi.view.select(['{pid}'])"); E("__nabi.flush()")
+    fld = E("(() => { const f = document.querySelector('#props [data-field=\"문단 간격\"]'); f.scrollIntoView({ block: 'center' }); const r = f.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, v: f.value }; })()")
+    y30 = ys()
+    check('P1 문단마다 간격 30이 들어 있는 글(템플릿 글 등) → 칸에 30으로 보임, 문단 사이 51+30', fld['v'] == '30' and y30[1] - y30[0] == 81, [fld['v'], y30])
+    click(fld); pg.keyboard.press('Control+a'); pg.keyboard.type('0'); pg.keyboard.press('Enter'); time.sleep(0.2)
+    y0 = ys()
+    check('P2 칸에 0 → 문단마다 정한 간격도 지워져 Enter 간격 = 줄 간격(51px)', y0[1] - y0[0] == 51, y0)
+    E("__nabi.history.undo()"); time.sleep(0.1)
+    check('P3 되돌리기 한 번에 원래 간격(30)으로', ys()[1] - ys()[0] == 81, ys())
+
     print('page errors:', errors[:5])
     b.close()
 

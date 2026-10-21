@@ -361,7 +361,22 @@ export class PropsPanel {
     );
     // 문단 간격: Enter로 나눈 문단 사이에 더 띄우는 거리(글상자 전체, 이어진 글상자는 첫 글상자 값). 0이면 Enter = 줄 간격만큼
     const heads = () => { const v2 = this.view; return [...new Set(this.textTargets().nodes.map((n) => { const ed = v2.editorOf(n); return v2.node(ed?.members?.[0]) || n; }))]; };
-    this.row(this.num('문단 간격', () => same(heads().map((n) => (Number.isFinite(+n.paraSpacing) ? +n.paraSpacing : 8))), (s) => this.view.setProps({ paraSpacing: Math.max(0, s) }, heads().map((n) => n.id)), { suffix: 'px', min: 0 }));
+    // 문단마다 따로 정한 간격(템플릿 글·붙여 넣은 글 등)이 있으면 그 값이 이기므로, 칸에 보여 주고 바꿀 때 함께 지운다(0.18.1)
+    const paraGap = () => {
+      const { eds } = this.textTargets();
+      const frameGap = same(heads().map((n) => (Number.isFinite(+n.paraSpacing) ? +n.paraSpacing : 8)));
+      const vals = eds.map((ed) => { const a = ed.paragraphAttr('spacing', true); return a === undefined ? MIXED : a ?? frameGap; });
+      return vals.length ? same(vals) : frameGap;
+    };
+    this.row(this.num('문단 간격', paraGap, (s, live) => {
+      const { eds } = this.textTargets();
+      this.history.batch(() => {
+        this.view.setProps({ paraSpacing: Math.max(0, s) }, heads().map((n) => n.id), live ? 'live:paraSpacing' : 'props');
+        for (const ed of eds) ed.setParagraphAttrs({ spacing: null }, true);
+      });
+      this.refresh();
+    }, { suffix: 'px', min: 0 }));
+    if (paraGap() !== 0) this.note('Enter 간격 = 줄 간격(행간) + 문단 간격. 문단 간격을 0으로 하면 Enter도 줄 간격만큼만 내려갑니다.');
     const alignOf = () => { const { eds, all } = this.textTargets(); return same(eds.map((ed) => ed.paragraphAttr('align', all) ?? 'left')); };
     this.row(
       this.seg(...[['bold', 'B', '굵게'], ['italic', 'I', '기울임'], ['underline', 'U', '밑줄'], ['strike', 'S', '취소선']].map(([m, t, title]) =>
