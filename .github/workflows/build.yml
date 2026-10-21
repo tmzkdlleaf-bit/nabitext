@@ -4,6 +4,8 @@
 #   - Actions 탭 → build → Run workflow: 설치 파일만 만든다(Artifacts에서 내려받기). 자동 업데이트 주소는 넣지 않는다.
 #   - v로 시작하는 태그(v0.12.0 등)를 올리면: 설치 파일 + 자동 업데이트 파일(latest*.yml)을 이 저장소의 GitHub Releases에
 #     '초안(draft)'으로 올린다. 초안을 확인하고 Publish release를 누르면 설치한 앱들이 새 버전을 받기 시작한다.
+#   - main에 package.json 버전을 올린 커밋을 푸시해도 같다: 그 버전의 태그(v0.17.0 등)가 아직 없으면 만들어 붙이고
+#     초안 릴리스를 만든다(태그를 직접 올리지 않아도 됨). 이미 있는 버전이면 아무것도 하지 않는다.
 #
 # 서명(없으면 서명 없이 만든다. README "설치 파일·서명·자동 업데이트" 참고)
 #   저장소 Settings → Secrets and variables → Actions → Secrets에 넣으면 자동으로 쓰인다.
@@ -17,10 +19,45 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: [main]
+    paths: ['package.json', '.github/workflows/build.yml']
 permissions:
   contents: write # 태그 빌드가 Releases 초안을 만든다
 jobs:
+  # 어떤 빌드인지 정한다. 태그 푸시 = 릴리스. main 푸시 = package.json 버전의 태그가 없을 때만 태그를 만들고 릴리스.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.p.outputs.release }}
+      ref: ${{ steps.p.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: p
+        shell: bash
+        run: |
+          if [[ "${{ needs.plan.outputs.release }}" == "true" ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"; echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"; echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          V="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$V" >/dev/null; then
+            echo "$V 태그가 이미 있음: 릴리스하지 않음"
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then echo "release=false" >> "$GITHUB_OUTPUT"; echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"; else echo "release=skip" >> "$GITHUB_OUTPUT"; fi
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then echo "release=false" >> "$GITHUB_OUTPUT"; echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$V" -m "${V#v}" "$GITHUB_SHA"
+          git push origin "$V"   # GITHUB_TOKEN으로 올린 태그는 워크플로를 다시 부르지 않는다(이 실행이 이어서 빌드)
+          echo "release=true" >> "$GITHUB_OUTPUT"; echo "ref=refs/tags/$V" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
+    if: needs.plan.outputs.release != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +76,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -66,7 +105,7 @@ jobs:
         run: |
           if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
           if [ -z "$APPLE_API_KEY_ID" ]; then unset APPLE_API_KEY_ID APPLE_API_ISSUER; fi
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "${{ needs.plan.outputs.release }}" == "true" ]]; then
             # 태그: 자동 업데이트 주소(이 저장소의 Releases)를 넣고 초안 릴리스에 올린다
             npx electron-builder ${{ matrix.target }} --publish always \
               -c.publish.provider=github -c.publish.owner="${GITHUB_REPOSITORY%%/*}" -c.publish.repo="${GITHUB_REPOSITORY#*/}" -c.publish.releaseType=draft
@@ -81,7 +120,8 @@ jobs:
 
   # Microsoft Store용 패키지. 저장소 Variables에 STORE_IDENTITY_NAME이 있을 때만
   store:
-    if: vars.STORE_IDENTITY_NAME != ''
+    needs: plan
+    if: vars.STORE_IDENTITY_NAME != '' && needs.plan.outputs.release != 'skip'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
