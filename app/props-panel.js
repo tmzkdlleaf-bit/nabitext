@@ -4,6 +4,7 @@
 // 숫자 칸: Enter·칸 벗어남 = 적용, Esc = 취소, ↑↓ = 1씩(Shift = 10씩, 이어서 누르면 되돌리기 한 단위).
 
 import { openSymbolPicker } from './symbols.js';
+import { WRAP_TYPES, WRAP_SHAPES, WRAP_SIDES, cleanWrap } from './wrap.js';
 import { BASE_STYLE } from '../src/layout.js';
 import * as M from './model.js';
 import { ColorField, MIXED, normHex } from './color.js';
@@ -180,7 +181,7 @@ export class PropsPanel {
     const v = this.view;
     const ns = this.nodes();
     const sig = JSON.stringify([v.selection, v.editing, !!v.crop, !!v.pathEdit, ns.map((n) => n.type),
-      this.leaves().map((n) => [n.type, n.shape, typeof n.fill === 'object' ? n.fill?.type : 'solid', n.mask?.kind, n.area?.kind, n.area?.mode, !!n.crop]),
+      this.leaves().map((n) => [n.type, n.shape, typeof n.fill === 'object' ? n.fill?.type : 'solid', n.mask?.kind, n.area?.kind, n.area?.mode, !!n.crop, n.wrap?.shape || 0, !!(n.bg?.color && n.bg.color !== 'none'), !!n.locked]),
       this.flowSig(), v.presetsKey, v.crossPageLinks, ns.length ? null : [v.pageGuides().length, !!v.page.bgImage, isMaster(v.page), !!v.getMaster?.()]]);
     // 끄는 중(요소 옮기기·크기 바꾸기)에는 패널을 새로 만들지 않는다: 누르자마자 끌면 첫 프레임이 패널 만드는 시간만큼 밀린다.
     // 끄기가 끝나면(onChange) 다시 불려 만든다
@@ -296,6 +297,7 @@ export class PropsPanel {
         mk && mk !== MIXED ? this.button('마스크 해제', () => v.setProps({ mask: null })) : null);
     }
     if (types.size === 1 && types.has('pathText')) this.buildPathText(leaves);
+    if (!v.editing && leaves.length && leaves.every((n) => WRAP_TYPES.has(n.type))) this.buildWrap(leaves);
     // 두 요소 조합
     if (v.pairFor(['image'])) { this.section('조합'); this.row(this.button('도형으로 마스크', () => v.run('mask'), '도형 모양대로 이미지를 자르고 도형은 지웁니다')); }
     if (v.pairFor(['text'])) { this.section('조합'); this.row(this.button('도형 모양으로 글상자', () => v.run('areaFromShape'), '도형 모양 안에 글을 흘려 넣고 도형은 지웁니다')); }
@@ -481,6 +483,24 @@ export class PropsPanel {
     if (!v.editing && sel.length === 2 && sel.every((n) => n?.type === 'text') && M.storyOf(sel[0]) !== M.storyOf(sel[1]))
       this.row(this.button('글상자 잇기', () => v.linkFrames(sel[0].id, sel[1].id), '먼저 고른 글상자에서 넘친 글이 나중 고른 글상자로 이어집니다'));
     if (!v.editing) this.note('넘친 글상자의 빨간 +(출구)를 누르고 다른 글상자나 빈 곳을 누르면 이어집니다.');
+  }
+
+  // 글 피해 가기: 이 사진·도형 둘레로 같은 장의 글상자 글이 흐른다(사진을 옮기면 글도 따라 다시 흐름)
+  buildWrap(leaves) {
+    const v = this.view;
+    const W = (k, d) => same(leaves.map((n) => (n.wrap ? cleanWrap(n.wrap)[k] : d)));
+    const isOn = () => same(leaves.map((n) => !!n.wrap));
+    const on = isOn();
+    const setW = (patch, live) => v.change(live ? 'live:wrap' : 'props', () => { for (const n of leaves) n.wrap = patch === null ? undefined : { ...cleanWrap(n.wrap || {}), ...patch }; });
+    this.section('글 피해 가기');
+    this.row(this.check('글이 이 요소를 피해 흐르게', isOn, (yes) => setW(yes ? {} : null)));
+    if (on === true) {
+      const hasImg = leaves.some((n) => n.type === 'image');
+      this.row(this.select('모양', WRAP_SHAPES.map(([k, t]) => [k, k === 'box' && !hasImg ? '상자(네모)' : k === 'outline' && hasImg ? '그림 윤곽선(투명 배경)' : t]), () => W('shape', 'box'), (shape) => setW({ shape })));
+      this.row(this.num('간격', () => W('gap', 16), (gap, live) => setW({ gap: Math.max(0, Math.min(500, gap)) }, live), { suffix: 'px', min: 0, max: 500 }),
+        this.select('', WRAP_SIDES, () => W('side', 'both'), (side) => setW({ side })));
+      if (W('shape', 'box') === 'outline' && hasImg) this.note('그림 윤곽선: 투명한 곳(투명 배경 PNG)은 글이 들어옵니다. 배경이 꽉 찬 사진이면 상자와 같습니다.');
+    } else this.note('켜면 같은 장의 글상자 글이 이 요소 둘레로 비켜 흐릅니다. 요소를 옮기면 글도 따라 다시 흐릅니다.');
   }
 
   // 기호 하나 넣기. 편집 중이 아니면 고른 글상자(첫 번째)를 편집 상태로 바꾸고 글 끝에 넣는다

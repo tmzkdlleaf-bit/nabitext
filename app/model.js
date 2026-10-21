@@ -5,6 +5,7 @@
 //           doc은 편집기가 만들어지기 전의 초기값이다. 편집기가 생기면 문서의 주인은 편집기이고,
 //           저장할 때 편집기 상태에서 다시 읽는다(serializePage).
 //   image   { src, fit: 'fill' | 'contain' | 'cover' }
+//   (이미지·도형·패스 공통) wrap: { shape, gap, side } — 같은 장 글상자의 글이 이 요소를 피해 흐름(app/wrap.js)
 //   shape   { shape: 'rect' | 'ellipse', fill, stroke, strokeWidth, radius }
 //   group   { children: [요소…] } — 자식 좌표는 장 기준 절대 좌표. 그룹의 x/y/w/h는 저장하지 않고 자식에서 계산한다.
 // 트리 배열의 순서 = 아래(먼저) → 위(나중).
@@ -82,7 +83,7 @@ export const isHidden = (n, ancestors = []) => n.hidden || ancestors.some((a) =>
 export const isLocked = (n, ancestors = []) => n.locked || ancestors.some((a) => a.locked);
 
 // 편집기 문서를 제외한 깊은 복사(되돌리기 스냅숏용)
-const NESTED = ['style', 'fill', 'crop', 'filters', 'mask', 'area', 'bg'];
+const NESTED = ['style', 'fill', 'crop', 'filters', 'mask', 'area', 'bg', 'wrap'];
 const deep = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v);
 export function cloneTree(list) {
   return list.map((n) => {

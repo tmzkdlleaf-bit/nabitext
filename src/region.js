@@ -57,7 +57,9 @@ function intersect(A, B) {
 //   { kind: 'path', d }                                        SVG 경로(even-odd). 구멍 포함 가능.
 //   { kind: 'alpha', image, fit, scale, threshold }            투명 배경 이미지
 //   { kind: 'colorKey', image, fit, scale, color, tolerance }  배경색을 바깥으로 판정
-// opts: { smooth, offset, invert }
+// opts: { smooth, offset, invert, exclude }
+//   exclude 피할 것 목록(app/wrap.js): [{ m: 요소→프레임 행렬 [a,b,c,d,e,f], w, h, shape: 'box'|'ellipse'|'outline', gap, side: 'both'|'jump',
+//           d(윤곽 경로), clip(이미지 마스크 경로), image + fit | drawRect(이미지 윤곽) }]
 //   smooth  외곽 다듬기 반경(px)
 //   offset  양수 = 안쪽으로 여백(수축), 음수 = 팽창. 프레임 가장자리도 바깥으로 취급한다.
 //   invert  도형 바깥쪽을 글 영역으로
@@ -87,6 +89,8 @@ export function buildRegion(w, h, source, opts = {}) {
   if (smooth > 0) mask = smoothMask(mask, w, h, smooth);
   if (invert) for (let i = 0; i < mask.length; i++) mask[i] ^= 1;
   if (offset) mask = offsetMask(mask, w, h, offset);
+  // 피할 것(글이 피해 가는 사진·도형): 그 자리를 비운다
+  if (opts.exclude?.length) { const ex = excludeMask(w, h, opts.exclude); for (let i = 0; i < mask.length; i++) if (ex[i]) mask[i] = 0; }
 
   return { region: new Region(w, h, mask), drawRect };
 }
@@ -260,4 +264,42 @@ function edt1d(f, n, d, v, z) {
     while (z[k + 1] < q) k++;
     d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
   }
+}
+
+// 피할 것들을 프레임 크기 마스크로(1 = 글을 놓지 않음)
+function excludeMask(W, H, list) {
+  const out = new Uint8Array(W * H);
+  for (const o of list) {
+    const g = Math.max(0, o.gap || 0);
+    const outline = o.shape === 'outline' && (o.d || o.image || o.clip);
+    // 윤곽선은 그린 뒤 마스크를 부풀린다(둘레 거리 = gap). 프레임 밖에 걸친 부분도 부풀어 들어오게 gap만큼 넓게 그린다
+    const pad = outline ? Math.ceil(g) : 0, PW = W + 2 * pad, PH = H + 2 * pad;
+    const ctx = ctx2d(PW, PH);
+    ctx.setTransform(1, 0, 0, 1, pad, pad);
+    ctx.transform(...o.m);
+    ctx.fillStyle = '#000';
+    if (o.shape === 'ellipse') {
+      ctx.beginPath(); ctx.ellipse(o.w / 2, o.h / 2, o.w / 2 + g, o.h / 2 + g, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (outline) {
+      if (o.image) {
+        if (o.clip) ctx.clip(new Path2D(o.clip), 'evenodd'); else { ctx.beginPath(); ctx.rect(0, 0, o.w, o.h); ctx.clip(); }
+        const iw = o.image.naturalWidth || o.image.width, ih = o.image.naturalHeight || o.image.height;
+        const r = o.drawRect || fitRect(iw, ih, o.w, o.h, o.fit || 'fill');
+        ctx.drawImage(o.image, r.x, r.y, r.w, r.h);
+      } else ctx.fill(new Path2D(o.d || o.clip), 'evenodd');
+    } else {
+      ctx.fillRect(-g, -g, o.w + 2 * g, o.h + 2 * g);
+    }
+    const a = ctx.getImageData(0, 0, PW, PH).data;
+    let m = new Uint8Array(PW * PH);
+    for (let i = 0; i < m.length; i++) m[i] = a[i * 4 + 3] >= 128 ? 1 : 0;
+    if (outline && g > 0) m = offsetMask(m, PW, PH, -g);
+    for (let y = 0; y < H; y++) {
+      const src = (y + pad) * PW + pad, dst = y * W;
+      let any = false;
+      for (let x = 0; x < W; x++) if (m[src + x]) { out[dst + x] = 1; any = true; }
+      if (any && o.side === 'jump') out.fill(1, dst, dst + W);
+    }
+  }
+  return out;
 }

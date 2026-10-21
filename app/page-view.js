@@ -19,6 +19,8 @@ import { installSnap, SNAP_PX } from './view-snap.js';
 import { installCommands } from './view-commands.js';
 import { installGuides } from './guides.js';
 
+const LONG_PRESS_MS = 520;      // 손가락·펜 길게 누르기 → 요소 메뉴
+const LONG_PRESS_SLOP_PX = 10;
 const HANDLE_PX = 8;      // 핸들 크기(화면 px)
 const ROTATE_GAP_PX = 26; // 회전 핸들과 상자 윗변 사이(화면 px)
 // 손가락으로 쓸 때(touchMode): 핸들을 크게 그리고, 누르는 범위도 넓게
@@ -383,15 +385,33 @@ export class PageView {
   }
 
   // 장 좌표 p에서 맨 위 요소. top: 최상위 요소(그룹이면 그룹), leaf: 실제로 맞은 요소
-  hitTest(p) {
+  // withLocked: 잠긴 요소도 맞힌다(잠기지 않은 요소가 하나도 맞지 않을 때만, 그때 locked = true)
+  hitTest(p, { withLocked = false } = {}) {
     const list = [];
     M.walk(this.page.elements, (n, _p, _i, anc) => { if (n.type !== 'group') list.push([n, anc]); });
+    let lockedHit = null;
     for (let i = list.length - 1; i >= 0; i--) {
       const [n, anc] = list[i];
-      if (M.isHidden(n, anc) || M.isLocked(n, anc)) continue;
+      if (M.isHidden(n, anc)) continue;
+      if (M.isLocked(n, anc)) { if (withLocked && !lockedHit && G.contains(n, p)) lockedHit = { top: anc[0] || n, leaf: n, locked: true }; continue; }
       if (G.contains(n, p)) return { top: anc[0] || n, leaf: n };
     }
-    return null;
+    return lockedHit;
+  }
+
+  // 잠긴 요소 하나를 골랐을 때 캔버스에 띄우는 자물쇠 단추(누르면 잠금 해제). 화면 좌표 { x, y, r } | null
+  lockBadge() {
+    const ns = this.selectedNodes();
+    if (ns.length !== 1 || this.editing || this.crop || this.pathEdit) return null;
+    const f = M.find(this.page.elements, ns[0].id);
+    if (!f || !M.isLocked(f.node, f.ancestors)) return null;
+    const b = M.boundsOf(ns[0]);
+    if (!b) return null;
+    // 자리: 요소 오른쪽 위 모서리 안쪽(장을 꽉 채운 배경이어도 눈금자 밑으로 숨지 않게), 화면 안으로
+    const v = this.pageToView({ x: b.x + b.w, y: b.y });
+    const r = this.touchMode ? 18 : 13, R = this.rect();
+    const x = Math.min(R.width - r - 6, Math.max(r + 30, v.x - r - 6)), y = Math.min(R.height - r - 6, Math.max(r + 30, v.y + r + 6));
+    return { x, y, r, id: (f.node.locked ? f.node : f.ancestors.find((a) => a.locked) || f.node).id };
   }
 
   // ---------- 겹침 표시(선택 상자·핸들·안내선) ----------
@@ -410,7 +430,16 @@ export class PageView {
       if (n) for (const leaf of M.leaves([n])) s += poly(G.corners(leaf), 'fill="none" stroke="#2d7ff9" stroke-width="1"');
     }
     const ns = this.selectedNodes();
-    if (ns.length) {
+    const lb = this.lockBadge();
+    if (lb) {
+      // 잠긴 요소: 회색 점선 테두리 + 자물쇠 단추(누르면 풀림)
+      s += poly(G.corners(M.boundsOf(ns[0]) && ns[0].type === 'group' ? { ...M.boundsOf(ns[0]), rotation: 0 } : ns[0]), 'fill="none" stroke="#8a857d" stroke-width="1.5" stroke-dasharray="5 3"');
+      const k = lb.r / 12;
+      s += `<g class="lock-badge" data-lock="1"><circle cx="${r3(lb.x)}" cy="${r3(lb.y)}" r="${lb.r}" fill="#fff" stroke="#8a857d" stroke-width="1.2"/>` +
+        `<g transform="translate(${r3(lb.x - 12 * k * 0.75)} ${r3(lb.y - 12 * k * 0.8)}) scale(${r3(k * 0.75)})" fill="none" stroke="#23211e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">` +
+        '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>' +
+        `<title>잠김 · 누르면 잠금 해제</title></g>`;
+    } else if (ns.length) {
       for (const n of ns) {
         if (n.type === 'group' || ns.length > 1) { const b = M.boundsOf(n); if (b) s += poly(G.corners({ ...b, rotation: 0 }), 'fill="none" stroke="#2d7ff9" stroke-width="1" stroke-dasharray="3 2"'); }
         else s += poly(G.corners(n), `fill="none" stroke="#2d7ff9" stroke-width="${this.editing ? 1 : 1.5}"`);
@@ -455,7 +484,13 @@ export class PageView {
     window.addEventListener('pointermove', (e) => this.onTouchMove(e));
     window.addEventListener('pointerup', (e) => this.onTouchUp(e));
     window.addEventListener('pointercancel', (e) => this.onTouchUp(e, true));
-    vp.addEventListener('contextmenu', (e) => { if (this.touchMode) e.preventDefault(); }); // 길게 눌렀을 때 뜨는 메뉴
+    // 오른쪽 클릭 = 요소 메뉴(잠금·풀기 등). 손가락·펜은 길게 누르기 타이머(onTouchDown)가 띄운다
+    vp.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (this.touchMode || e.pointerType === 'touch' || e.pointerType === 'pen') return;
+      if (e.target.closest?.('.pv-ruler')) return;
+      this.openContextAt(e.clientX, e.clientY);
+    });
     vp.addEventListener('mousemove', (e) => { if (!this.drag) this.onHover(e); });
     vp.addEventListener('mouseleave', () => { this.hover = null; this.drawOverlay(); });
     vp.addEventListener('wheel', (e) => {
@@ -505,8 +540,10 @@ export class PageView {
     if (n === 1) {
       this.gesture = null;
       if (e.target.closest?.('.pv-ruler')) return; // 눈금자: 가이드 끌기(guides.js)
+      this.armLongPress(e);
       return this.onDown(pressEvent(e));
     }
+    this.cancelLongPress();
     if (this.gesture) { this.gesture.max = Math.max(this.gesture.max, n); return; }
     // 두 번째 손가락: 한 손가락 동작을 아직 움직이지 않았으면 취소하고 확대·이동으로. 이미 끄는 중이면 그대로 둔다
     if (this.drag && !abortTrack()) return;
@@ -521,6 +558,7 @@ export class PageView {
   onTouchMove(e) {
     const t = this.touches.get(e.pointerId);
     if (!t) return;
+    if (this._lp && Math.hypot(e.clientX - this._lp.x, e.clientY - this._lp.y) > LONG_PRESS_SLOP_PX) this.cancelLongPress();
     t.x = e.clientX; t.y = e.clientY;
     const g = this.gesture;
     if (!g) return;
@@ -536,6 +574,7 @@ export class PageView {
   }
   onTouchUp(e, cancelled = false) {
     if (!this.touches.delete(e.pointerId)) return;
+    this.cancelLongPress();
     const g = this.gesture;
     if (g) {
       if (this.touches.size) return; // 남은 손가락이 다 떨어질 때까지 기다린다(다시 한 손가락 끌기로 바꾸지 않음)
@@ -547,6 +586,37 @@ export class PageView {
     }
     // 글상자 편집 중이면 화면 자판을 띄운다(자판은 손을 뗄 때에만 띄울 수 있음). 탭 처리(편집 들어가기)가 끝난 뒤에
     if (!this.touches.size && !cancelled) setTimeout(() => { if (this.editing) this.activeEditor?.showKeyboard(); }, 0);
+  }
+
+  // 손가락·펜 길게 누르기(움직이지 않고 LONG_PRESS_MS) → 요소 메뉴. 이미 끌기 시작했으면 띄우지 않는다
+  armLongPress(e) {
+    this.cancelLongPress();
+    const x = e.clientX, y = e.clientY;
+    this._lp = { x, y, timer: setTimeout(() => {
+      this._lp = null;
+      if (this.touches.size !== 1 || this.gesture) return;
+      if (this.editing && this.activeEditor?.members.some((id) => { const n = this.node(id); return n && G.contains(n, this.clientToPage(x, y)); })) return; // 글 편집 중: 편집기에 맡김
+      if (this.drag && !abortTrack()) return; // 이미 움직이는 중
+      this.drag = null; this.marquee = null; this.guides = []; this.spacing = [];
+      navigator.vibrate?.(12);
+      this.openContextAt(x, y);
+    }, LONG_PRESS_MS) };
+  }
+  cancelLongPress() { if (this._lp) { clearTimeout(this._lp.timer); this._lp = null; } }
+
+  // 그 자리의 요소를 고르고(잠긴 요소 포함) 요소 메뉴를 띄운다. 메뉴 내용은 앱이 만든다(onContextMenu)
+  openContextAt(cx, cy) {
+    const p = this.clientToPage(cx, cy);
+    if (this.editing) {
+      const ed = this.activeEditor;
+      if (ed && ed.members.some((id) => { const n = this.node(id); return n && G.contains(n, p); })) return;
+      this.exitEdit();
+    }
+    const hit = this.hitTest(p, { withLocked: true });
+    if (hit && !this.selection.includes(hit.top.id)) this.select([hit.top.id]);
+    else if (!hit) this.select([]);
+    this.drawOverlay();
+    this.onContextMenu?.(cx, cy, hit);
   }
 
   handleAt(vx, vy) {
@@ -602,9 +672,16 @@ export class PageView {
 
     if (this.modeDown(e, p, vx, vy)) return;
     if (this.tool !== 'select') return this.startCreate(e, p);
+    const lb = this.lockBadge();
+    if (lb && Math.hypot(vx - lb.x, vy - lb.y) <= lb.r + (this.touchMode ? 6 : 2)) { this.setFlag(lb.id, 'locked', false); return; }
     const h = this.handleAt(vx, vy);
     if (h) return h.kind === 'rotate' ? this.startRotate(e, p) : this.startResize(e, p, h.hx, h.hy);
-    const hit = this.hitTest(p);
+    const hit = this.hitTest(p, { withLocked: true });
+    // 잠긴 요소: 누르면 고르기만 한다(움직이지 않음, 캔버스에 자물쇠 단추). 누른 채 끌면 그 자리에서 범위 선택
+    if (hit?.locked) {
+      const id = hit.top.id;
+      return this.startMarquee(e, p, { click: () => this.select(e.shiftKey ? [...new Set([...this.selection, id])] : [id]) });
+    }
     if (hit) {
       if (e.detail >= 2 && hit.leaf.type === 'text') return this.enterEdit(hit.leaf.id, { x: e.clientX, y: e.clientY });
       if (e.detail >= 2 && hit.leaf.type === 'path' && !hit.leaf.locked) return this.enterPathEdit(hit.leaf.id);
@@ -746,9 +823,10 @@ export class PageView {
     }, (_ev, _p, moved) => { if (moved) this.commit('rotate', before, selBefore); });
   }
 
-  startMarquee(e, p0) {
+  // click: 움직이지 않고 뗐을 때 대신 할 일(잠긴 요소 고르기)
+  startMarquee(e, p0, { click = null } = {}) {
     const base = e.shiftKey ? [...this.selection] : [];
-    if (!e.shiftKey) this.select([]);
+    if (!e.shiftKey && !click) this.select([]);
     this.drag = { kind: 'marquee' };
     this.track(e, (_ev, p) => {
       this.marquee = { x: Math.min(p0.x, p.x), y: Math.min(p0.y, p.y), w: Math.abs(p.x - p0.x), h: Math.abs(p.y - p0.y) };
@@ -760,7 +838,7 @@ export class PageView {
       }
       this.selection = [...new Set([...base, ...ids])];
       this.drawOverlay();
-    }, () => { this.marquee = null; this.select(this.selection); });
+    }, (_ev, _p, moved) => { this.marquee = null; if (!moved && click) click(); else this.select(this.selection); });
   }
 
   // 도구로 만들기: 끌면 그 크기, 클릭만 하면 기본 크기. Shift = 정사각형

@@ -22,6 +22,8 @@ import { setImageSource, bumpProxy, BLANK } from '../src/image-src.js';
 import * as P from './project.js';
 import { saveRecovery, orphanRecoveries, clearRecovery, claimTab } from './recovery.js';
 import { listLibraryFonts, putLibraryFonts, deleteLibraryFamily, fontKey } from './font-library.js';
+import { showContextMenu } from './context-menu.js';
+import { WRAP_TYPES } from './wrap.js';
 import * as TPL from './templates.js';
 import { isMaster, newMaster } from './master.js';
 import { FindBar, FIND_CSS } from './find.js';
@@ -711,6 +713,36 @@ $('fontAdd').onclick = () => $('fontFile').click();
 // 캔버스에 글꼴 파일을 끌어다 놓아도 넣는다
 view.onFontFiles = (files) => addFontFiles(files);
 // 태블릿: 두 손가락 톡 = 되돌리기, 세 손가락 톡 = 다시 실행
+// 캔버스 오른쪽 클릭·길게 누르기 메뉴: 잠금·잠금 해제, 글 피해 가기, 순서, 복제, 숨김, 삭제
+view.onContextMenu = (cx, cy) => {
+  const ns = view.selectedNodes();
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const K = (k) => k.replace('Mod', isMac ? '⌘' : 'Ctrl');
+  const lockedOf = (n) => { const f = M.find(view.page.elements, n.id); return !!f && M.isLocked(f.node, f.ancestors); };
+  const items = [];
+  if (ns.length) {
+    const allLocked = ns.every((n) => n.locked), anyLocked = ns.some(lockedOf);
+    items.push({ label: allLocked ? '잠금 해제' : '잠그기', keys: K('Mod+Shift+L'), act: () => view.run('lock') });
+    const leaves = M.leaves(ns);
+    if (leaves.length && leaves.every((n) => WRAP_TYPES.has(n.type))) {
+      const on = leaves.every((n) => n.wrap);
+      items.push({ label: '글이 이 요소를 피해 흐르게', checked: on, disabled: anyLocked, act: () => view.change('props', () => { for (const n of leaves) n.wrap = on ? undefined : (n.wrap || { shape: 'box', gap: 16, side: 'both' }); }) });
+    }
+    items.push('-',
+      { label: '복제', keys: K('Mod+D'), disabled: anyLocked, act: () => view.run('duplicate') },
+      { label: '맨 앞으로', keys: K('Mod+Shift+]'), disabled: anyLocked, act: () => view.run('front') },
+      { label: '맨 뒤로', keys: K('Mod+Shift+['), disabled: anyLocked, act: () => view.run('back') },
+      { label: '숨기기', keys: K('Mod+Shift+H'), act: () => view.run('hide') },
+      '-',
+      { label: '삭제', keys: 'Delete', disabled: anyLocked, act: () => view.run('delete') });
+  } else {
+    const locked = []; M.walk(view.page.elements, (n) => { if (n.locked) locked.push(n); });
+    items.push({ label: locked.length ? `이 장의 잠금 모두 풀기 (${locked.length}개)` : '잠긴 요소 없음', disabled: !locked.length,
+      act: () => view.change('lock', () => { for (const n of locked) n.locked = false; }) });
+    items.push({ label: '모두 선택', keys: K('Mod+A'), act: () => view.run('selectAll') });
+  }
+  showContextMenu(cx, cy, items);
+};
 view.onGestureTap = (n) => {
   if (n === 2 && history.canUndo) { history.undo(); status('되돌리기(두 손가락 톡)'); }
   else if (n >= 3 && history.canRedo) { history.redo(); status('다시 실행(세 손가락 톡)'); }

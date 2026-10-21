@@ -68,7 +68,7 @@ export function paint(fill, svg, id) {
 }
 
 // ---------- 도형·패스 ----------
-function shapePathD(n, w, h, sw) {
+export function shapePathD(n, w, h, sw) {
   // 테두리가 상자 안에 들어오도록 선 두께의 절반만큼 안쪽에 그린다
   const iw = Math.max(0, w - sw), ih = Math.max(0, h - sw);
   let d;

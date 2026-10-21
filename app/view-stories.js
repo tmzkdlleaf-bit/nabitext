@@ -8,6 +8,7 @@ import * as G from './geom.js';
 import * as M from './model.js';
 import { pageCss, pageBgCss, boxCss, contentOf, textFrame, textBg } from './render-el.js';
 import { mixin } from './util.js';
+import { wrapObstacles } from './wrap.js';
 import { buildMasterLayer } from './master.js';
 import { displaySrc, srcReady, srcDims, withOriginals, withThumbs } from '../src/image-src.js';
 
@@ -29,11 +30,15 @@ class StoryMethods {
       sp.frame = { ...sp.frame, style: head.style || {}, paragraphSpacing: Math.max(0, Number.isFinite(+head.paraSpacing) ? +head.paraSpacing : 8), presets: this.presets, autoShrink: !!head.autoShrink, minScale: head.minScale ?? 0.5 };
       return sp;
     });
+    const waitFor = specs.filter((sp) => sp.pending).map((sp) => sp.pending);
     const built = specs.map((sp, i) => {
       const n = list[i];
-      const rk = JSON.stringify([sp.frame.w, sp.frame.h, n.padding, n.area, !!sp.pending]);
+      // 글이 피해 가는 사진·도형(같은 장): 옮기거나 바꾸면 영역을 다시 계산한다
+      const ob = wrapObstacles(n, (pages[i] || this.page)?.elements, this.images);
+      waitFor.push(...ob.pending);
+      const rk = JSON.stringify([sp.frame.w, sp.frame.h, n.padding, n.area, !!sp.pending]) + (ob.key ? '#' + ob.key : '');
       let c = this.regions.get(n.id);
-      if (!c || c.key !== rk) { c = { key: rk, built: buildRegion(sp.frame.w, sp.frame.h, sp.frame.source, sp.opts) }; this.regions.set(n.id, c); }
+      if (!c || c.key !== rk) { c = { key: rk, built: buildRegion(sp.frame.w, sp.frame.h, sp.frame.source, ob.list.length ? { ...sp.opts, exclude: ob.list } : sp.opts) }; this.regions.set(n.id, c); }
       return c.built;
     });
     const key = JSON.stringify([list.map((n, i) => [n.id, this.regions.get(n.id).key]), specs[0].frame.style, specs[0].frame.paragraphSpacing, head.autoShrink, head.minScale, this.presetsKey]);
@@ -51,9 +56,8 @@ class StoryMethods {
       ed._key = key;
     }
     // 이미지 외곽선의 이미지가 오면 한 번만 다시 그린다(이미지마다 기다리는 곳 하나)
-    for (const sp of specs) if (sp.pending && !this.waiting.has(sp.pending)) {
-      this.waiting.add(sp.pending);
-      const src = sp.pending;
+    for (const src of waitFor) if (!this.waiting.has(src)) {
+      this.waiting.add(src);
       this.loadImage(src).then(() => {
         this.waiting.delete(src);
         for (const [id, c] of this.regions) if (c.key.includes(src)) this.regions.delete(id); // 그 이미지를 쓰는 영역만 다시 계산

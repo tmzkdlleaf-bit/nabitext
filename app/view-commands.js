@@ -160,7 +160,7 @@ class CommandMethods {
     if (!ns.length) return false;
     if (this.editing) this.exitEdit();
     const on = !ns.every((n) => n[flag]);
-    return this.change(flag, () => { for (const n of ns) n[flag] = on; if (on) this.selection = []; });
+    return this.change(flag, () => { for (const n of ns) n[flag] = on; if (on && flag === 'hidden') this.selection = []; }); // 잠가도 선택은 그대로(캔버스의 자물쇠 단추로 바로 풀 수 있게)
   }
 
   // 정렬: 2개 이상이면 선택 전체 상자, 1개면 장에 맞춘다. how: left|hcenter|right|top|vcenter|bottom
@@ -263,7 +263,7 @@ class CommandMethods {
     if (!n || !!n[flag] === on) return false;
     return this.change(flag, () => {
       n[flag] = on;
-      if (on) this.selection = this.selection.filter((s) => !M.idsOf([n]).includes(s));
+      if (on && flag === 'hidden') this.selection = this.selection.filter((s) => !M.idsOf([n]).includes(s));
     });
   }
 
