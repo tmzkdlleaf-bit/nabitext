@@ -254,8 +254,8 @@ with sync_playwright() as p:
     pg2.click('#fileMenuBtn'); pg2.click('#fileNew'); pg2.wait_for_function("!!document.querySelector('.modal-bg')", timeout=5000); E2("T.press('저장하지 않음')")  # 12단계 개편: 파일 메뉴(≡) 안
     pg2.wait_for_function("__nabi.app.project.pages.length === 1", timeout=5000)
     check('B11 변경이 있을 때 새로 만들기 → 저장/저장하지 않음/취소 확인, 취소면 그대로, 저장하지 않음이면 빈 새 프로젝트',
-          m3['buttons'] == ['저장', '저장하지 않음', '취소'] and kept == 3 and E2("__nabi.app.project.name") == '제목 없음' and E2("T.V.page.elements.length") == 0 and E2("__nabi.assets.byId.size") == 0 and not E2("[...document.fonts].some((f) => f.family.replace(/\"/g, '') === 'TeX Gyre Cursor')"),
-          [m3, kept])
+          m3['buttons'] == ['저장', '저장하지 않음', '취소'] and kept == 3 and E2("__nabi.app.project.name") == '제목 없음' and E2("T.V.page.elements.length") == 0 and E2("__nabi.assets.byId.size") == 0 and E2("__nabi.app.project.fonts.length") == 0,
+          [m3, kept, E2("__nabi.assets.byId.size"), E2("__nabi.app.project.fonts.length")])  # 0.17: 넣은 글꼴은 '내 글꼴'로 남는 것이 맞음(프로젝트 글꼴만 비움)
     pg2.close()
 
     # ============ C. 자동 저장·복구 ============
