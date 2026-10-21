@@ -215,6 +215,31 @@ export function contentKey(n) {
   return JSON.stringify(rest) + (n.type === 'pathText' ? `#${measureGen}` : '') + (n.type === 'image' || n.fill?.type === 'pattern' ? `@${proxyGen}` : '');
 }
 
+// ---------- 글상자 바탕 ----------
+// bg: { color, opacity(0–1), radius(사각형 모서리), stroke(테두리 색), strokeWidth } — 글보다 뒤에 깔린다.
+//   글상자 모양이 원·도넛·자유형이면 그 모양대로 칠한다(모양 바깥에 글을 흘리는 '반전'이면 상자 전체).
+export const hasTextBg = (n) => !!(n.bg && ((n.bg.color && n.bg.color !== 'none') || num(n.bg.strokeWidth) > 0));
+export const textBgKey = (n) => (hasTextBg(n) ? JSON.stringify([n.bg, Math.round(n.w), Math.round(n.h), n.area?.kind, n.area?.inner, n.area?.d, n.area?.invert]) : '');
+export function textBg(n) {
+  if (!hasTextBg(n)) return null;
+  const b = n.bg, w = Math.max(1, num(n.w)), h = Math.max(1, num(n.h));
+  const sw = Math.max(0, num(b.strokeWidth));
+  const svg = svgRoot(w, h);
+  svg.setAttribute('class', 'text-bg');
+  svg.style.pointerEvents = 'none';
+  const a = n.area || { kind: 'rect' };
+  let shape;
+  if (a.invert || a.kind === 'image' || !['ellipse', 'donut', 'path'].includes(a.kind)) shape = el('path', { d: Pth.rectD(w, h, Math.max(0, num(b.radius))) });
+  else if (a.kind === 'ellipse') shape = el('ellipse', { cx: r3(w / 2), cy: r3(h / 2), rx: r3(w / 2), ry: r3(h / 2) });
+  else if (a.kind === 'donut') shape = el('path', { d: Pth.donutD(w, h, Math.max(0.05, Math.min(0.95, num(a.inner, 0.45)))), 'fill-rule': 'evenodd' });
+  else shape = a.d ? el('path', { d: Pth.scaleD(a.d, w / (num(a.pw) || w), h / (num(a.ph) || h)) }) : el('path', { d: Pth.rectD(w, h) });
+  shape.setAttribute('fill', b.color && b.color !== 'none' ? safeColor(b.color, '#ffffff') : 'none');
+  shape.setAttribute('fill-opacity', Math.max(0, Math.min(1, num(b.opacity, 1))));
+  if (sw > 0) { shape.setAttribute('stroke', safeColor(b.stroke, '#000000')); shape.setAttribute('stroke-width', r3(sw)); }
+  svg.appendChild(shape);
+  return svg;
+}
+
 // ---------- 글상자 모양(area) ----------
 // area: 없음/{ kind: 'rect' } | { kind: 'ellipse' } | { kind: 'donut', inner } | { kind: 'path', d, pw, ph }
 //       | { kind: 'image', src, mode: 'alpha' | 'colorKey', threshold, color, tolerance, fit, show, opacity }

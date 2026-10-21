@@ -11,7 +11,7 @@ import * as G from './geom.js';
 import * as M from './model.js';
 import { trackPointer, pressEvent, abortTrack } from './util.js';
 import { buildMasterLayer, masterKey, pageNumber } from './master.js';
-import { r3, pageCss, pageBgCss, boxCss, contentOf, contentKey } from './render-el.js';
+import { r3, pageCss, pageBgCss, boxCss, contentOf, contentKey, textBg, textBgKey } from './render-el.js';
 import { installModes, pathElementFrom } from './modes.js';
 import { installTextFlow } from './text-flow.js';
 import { installStories } from './view-stories.js';
@@ -281,7 +281,10 @@ export class PageView {
       if (!ed) return;
       const k = ed.members.indexOf(n.id);
       const v = k > 0 ? ed.more[k - 1] : { host: ed.host, overlay: ed.overlay };
-      if (v.host.parentNode !== el) el.replaceChildren(v.host);
+      // 글상자 바탕(글 뒤): 바뀔 때만 다시 만든다
+      const bk = textBgKey(n);
+      if (el._bgKey !== bk) { el._bg = textBg(n); el._bgKey = bk; }
+      if (v.host.parentNode !== el || el.firstChild !== (el._bg || v.host) || (!el._bg && el.childNodes.length > 1)) el.replaceChildren(...(el._bg ? [el._bg] : []), v.host);
       const on = !!this.editing && this.editorOf(this.node(this.editing)) === ed;
       v.host.style.pointerEvents = on ? 'auto' : 'none';
       v.overlay.style.display = on ? '' : 'none';

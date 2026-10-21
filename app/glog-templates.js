@@ -1,4 +1,4 @@
-// 기본 글로그 틀: 커뮤·TRPG·SNS에서 많이 쓰는 글 로그 이미지 형식을 새 장으로 만든다.
+// 기본 글로그 틀: 커뮤·TRPG·SNS에서 많이 쓰는 글 로그 이미지 형식을 새 장으로 만든다(0.17: 글 위주 20 + 사진 10).
 // 배치·글꼴·색은 고치기 쉬운 기본값이고, 글은 모두 자리 표시 글(인물 이름·설정은 넣지 않음)이다.
 // 사진 자리는 이미지 슬롯(주황 점선): 사진을 끌어다 놓거나 속성 패널 "이미지 바꾸기"로 채운다.
 // build(ctx) → { background, elements }. ctx.photo(w, h): 사진 자리 그림 주소(앱이 만들어 넘김)
@@ -347,6 +347,255 @@ export const PHOTO_TEMPLATES = [
   },
 ];
 
+
+// ---------- 더 많은 글 위주 틀(0.17) ----------
+// 글상자 바탕(bg)을 쓰는 틀: 판정 상자·이름표·메모지처럼 글 뒤에 색을 깐다(속성 패널 "글상자 바탕"에서 바꿈)
+const chip = (name, box, label, bg, extra = {}) => text(name, { h: 44, ...box }, { fontSize: 22, fontWeight: 700, color: '#ffffff', lineHeight: 1.4 },
+  doc(P(label, { align: 'center' })), { padding: 6, bg: { color: bg, opacity: 1, radius: 22 }, ...extra });
+
+export const MORE_TEXT_TEMPLATES = [
+  {
+    id: 'trpg-log', name: 'TRPG 세션 로그', desc: '머리 띠·대화·판정 상자. 세션 로그를 장면별로 정리', w: 1080, h: 1350,
+    build: () => {
+      const line = (name, said) => P([[name, [B, color('#3b4f8a')]], ['　' + said]], { spacing: 14 });
+      const note = (t) => P(t, { spacing: 14 }, [I, color('#8a8a8a')]);
+      const roll = (name, y, head, body) => text(name, { x: 80, y, w: 920, h: 132 }, { fontFamily: MONO, fontSize: 24, color: '#f3f1ea', lineHeight: 1.6 },
+        doc(P([['판정', [B, color('#ffd479')]], ['　' + head]]), P(body)), { padding: 24, bg: { color: '#2f3442', opacity: 1, radius: 14 } });
+      return {
+        background: '#f4f1ea',
+        elements: [
+          rect('머리 띠', { x: 0, y: 0, w: 1080, h: 190 }, '#2b2f3a'),
+          text('세션 제목', { x: 80, y: 50, w: 920, h: 70 }, { fontSize: 44, fontWeight: 700, color: '#ffffff', lineHeight: 1.3 }, doc(P('세션 제목'))),
+          text('세션 정보', { x: 80, y: 124, w: 920, h: 40 }, { fontSize: 22, color: '#b9bfcc' }, doc(P('시나리오 이름　·　진행 ○○　·　참여 ○○, ○○'))),
+          text('장면 1', { x: 80, y: 236, w: 920, h: 330 }, { fontSize: 26, color: '#2a2a2a', lineHeight: 1.7 },
+            doc(note('(장면 설명: 장소와 분위기를 짧게)'), line('인물 A', '첫 번째 대사입니다.'), line('인물 B', '두 번째 대사입니다.'), line('인물 A', '대사가 길면 다음 줄로 이어집니다.')), { autoShrink: true, minScale: 0.6 }),
+          roll('판정 1', 590, '기능 이름 (목표 00)', '1D100 → 00　성공'),
+          text('장면 2', { x: 80, y: 744, w: 920, h: 330 }, { fontSize: 26, color: '#2a2a2a', lineHeight: 1.7 },
+            doc(line('인물 B', '판정 뒤에 이어지는 대사입니다.'), note('(잠시 침묵)'), line('인물 A', '장면이 끝나는 대사입니다.')), { autoShrink: true, minScale: 0.6 }),
+          roll('판정 2', 1100, '다른 판정 (목표 00)', '1D100 → 00　실패　·　결과를 적습니다'),
+        ],
+      };
+    },
+  },
+  {
+    id: 'sheet', name: '캐릭터 시트', desc: '이름·정보·능력치 8칸·기능·소지품·메모. 탐사자·캐릭터 정리용', w: 1080, h: 1350,
+    build: () => {
+      const stats = ['STR', 'CON', 'SIZ', 'DEX', 'APP', 'INT', 'POW', 'EDU'];
+      const bw = (920 - 3 * 16) / 4;
+      const cells = stats.map((k, i) => {
+        const x = 80 + (i % 4) * (bw + 16), y = 330 + Math.floor(i / 4) * 126;
+        return group(`능력치 ${k}`, [
+          rect('칸', { x, y, w: bw, h: 110 }, '#ffffff', { stroke: '#d8d2c6', strokeWidth: 2, radius: 12 }),
+          text('이름', { x, y: y + 14, w: bw, h: 32 }, { fontSize: 20, fontWeight: 700, color: '#8a7f6e', letterSpacing: 2 }, doc(P(k, { align: 'center' }))),
+          text('값', { x, y: y + 48, w: bw, h: 52 }, { fontSize: 38, fontWeight: 700, color: '#2b2722', lineHeight: 1.2 }, doc(P('00', { align: 'center' }))),
+        ]);
+      });
+      const skills = ['기능 이름', '기능 이름', '기능 이름', '기능 이름', '기능 이름', '기능 이름', '기능 이름', '기능 이름'].map((k) => P([[k, []], ['　'], ['00%', [B, color('#3d4a5c')]]]));
+      return {
+        background: '#faf8f4',
+        elements: [
+          text('작은 제목', { x: 80, y: 70, w: 920, h: 34 }, { fontSize: 20, color: '#9a8f80', letterSpacing: 6 }, doc(P('CHARACTER SHEET'))),
+          text('이름', { x: 80, y: 106, w: 920, h: 80 }, { fontSize: 54, fontWeight: 700, color: '#2b2722', lineHeight: 1.3 }, doc(P('이름'))),
+          text('정보', { x: 80, y: 192, w: 920, h: 40 }, { fontSize: 22, color: '#7a7266' }, doc(P('직업　·　나이　·　출신　·　한 줄 소개'))),
+          chip('능력치 머리', { x: 80, y: 266, w: 180 }, '능력치', '#3d4a5c'),
+          ...cells,
+          chip('기능 머리', { x: 80, y: 610, w: 180 }, '기능', '#3d4a5c'),
+          text('기능 목록', { x: 80, y: 670, w: 440, h: 600 }, { fontSize: 24, color: '#333', lineHeight: 1.9 }, doc(...skills), { autoShrink: true, minScale: 0.6 }),
+          chip('소지품 머리', { x: 560, y: 610, w: 180 }, '소지품', '#8a6f3b'),
+          text('소지품', { x: 560, y: 670, w: 440, h: 230 }, { fontSize: 24, color: '#333', lineHeight: 1.8 }, doc(P('· 물건 하나'), P('· 물건 둘'), P('· 물건 셋')), { autoShrink: true, minScale: 0.6 }),
+          chip('메모 머리', { x: 560, y: 930, w: 180 }, '메모', '#8a6f3b'),
+          text('메모', { x: 560, y: 990, w: 440, h: 280 }, { fontSize: 22, color: '#444', lineHeight: 1.7 }, doc(P('배경·성격·관계를 적는 칸입니다.')), { autoShrink: true, minScale: 0.6, padding: 18, bg: { color: '#ffffff', opacity: 1, radius: 12, stroke: '#e3ddd1', strokeWidth: 2 } }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'qna', name: '문답', desc: 'Q·A가 번갈아 나오는 문답 정리(자캐 문답 등)', w: 1080, h: 1350,
+    build: () => {
+      const qa = (q, a) => [P([['Q.', [B, color('#d9774a')]], ['　' + q, [B]]], { spacing: 6 }), P([['A.', [B, color('#6f93c2')]], ['　' + a]], { spacing: 30 })];
+      return {
+        background: '#fff7f0',
+        elements: [
+          text('제목', { x: 80, y: 80, w: 920, h: 76 }, { fontSize: 48, fontWeight: 700, color: '#5a3a2a', lineHeight: 1.3 }, doc(P('○○ 문답', { align: 'center' }))),
+          text('정보', { x: 80, y: 164, w: 920, h: 40 }, { fontSize: 22, color: '#b08a72' }, doc(P('답한 사람　·　날짜', { align: 'center' }))),
+          hr('구분선', 480, 228, 120, '#e6c9b4', 3),
+          text('문답', { x: 80, y: 270, w: 920, h: 1010 }, { fontSize: 26, color: '#3b2f28', lineHeight: 1.7 },
+            doc(...qa('첫 번째 질문입니다.', '답을 여기에 씁니다.'), ...qa('두 번째 질문입니다.', '답이 길면 다음 줄로 이어집니다. ' + BODY),
+              ...qa('세 번째 질문입니다.', '답을 씁니다.'), ...qa('네 번째 질문입니다.', '답을 씁니다.'), ...qa('다섯 번째 질문입니다.', '답을 씁니다.')), { autoShrink: true, minScale: 0.55 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'timeline', name: '연표', desc: '세로 선을 따라 날짜·사건 다섯 개. 인물사·세계관 정리에', w: 1080, h: 1350,
+    build: () => {
+      const accents = ['#4a78c2', '#c2694a', '#4a9c78', '#8a5cc2', '#c29a4a'];
+      const items = accents.map((c, i) => {
+        const y = 270 + i * 205;
+        return group(`사건 ${i + 1}`, [
+          oval('점', { x: 184, y: y + 6, w: 28, h: 28 }, c),
+          text('때', { x: 20, y: y + 2, w: 150, h: 36 }, { fontSize: 22, fontWeight: 700, color: c }, doc(P('0000년', { align: 'right' }))),
+          text('사건', { x: 240, y: y - 2, w: 760, h: 44 }, { fontSize: 28, fontWeight: 700, color: '#1f2a37', lineHeight: 1.4 }, doc(P('사건 제목'))),
+          text('설명', { x: 240, y: y + 46, w: 760, h: 120 }, { fontSize: 22, color: '#55606d', lineHeight: 1.6 }, doc(P('있었던 일을 짧게 적습니다. 두세 줄이면 알맞습니다.')), { autoShrink: true, minScale: 0.6 }),
+        ]);
+      });
+      return {
+        background: '#f6f7f9',
+        elements: [
+          text('제목', { x: 80, y: 80, w: 920, h: 70 }, { fontSize: 46, fontWeight: 700, color: '#1f2a37', lineHeight: 1.3 }, doc(P('제목'))),
+          text('부제', { x: 80, y: 156, w: 920, h: 40 }, { fontSize: 22, color: '#6b7785' }, doc(P('인물·사건의 흐름'))),
+          rect('세로 선', { x: 196, y: 250, w: 4, h: 1030 }, '#c9d2dc'),
+          ...items,
+        ],
+      };
+    },
+  },
+  {
+    id: 'handout', name: '핸드아웃(문서 자료)', desc: '낡은 종이·문서 번호·도장. TRPG에서 건네는 기록·보고서 자료', w: 1080, h: 1350,
+    build: () => ({
+      background: '#d9cdb4',
+      elements: [
+        rect('종이', { x: 70, y: 70, w: 940, h: 1210 }, '#f3ead6', { stroke: '#c4b28c', strokeWidth: 2, radius: 4 }),
+        text('문서 번호', { x: 130, y: 124, w: 560, h: 36 }, { fontFamily: MONO, fontSize: 20, color: '#7d6b4a' }, doc(P('No. 0000-00　|　열람 제한'))),
+        text('도장', { x: 730, y: 112, w: 210, h: 92 }, { fontFamily: SERIF, fontSize: 44, fontWeight: 700, color: '#b3261e', letterSpacing: 8, lineHeight: 1.2 }, doc(P('기 밀', { align: 'center' })),
+          { padding: 14, rotation: -8, opacity: 0.85, bg: { color: 'none', opacity: 1, radius: 10, stroke: '#b3261e', strokeWidth: 5 } }),
+        text('제목', { x: 130, y: 236, w: 820, h: 80 }, { fontFamily: SERIF, fontSize: 46, fontWeight: 700, color: '#2e2618', lineHeight: 1.3 }, doc(P('자료 제목'))),
+        hr('구분선', 130, 330, 820, '#a8946b', 2),
+        text('본문', { x: 130, y: 370, w: 820, h: 700 }, { fontFamily: SERIF, fontSize: 25, color: '#2e2618', lineHeight: 1.85 },
+          doc(P(LONG, { align: 'justify', indent: 25, spacing: 12 }), P(BODY, { align: 'justify', indent: 25, spacing: 12 }), P('— 이하 판독 불가 —', { align: 'center' }, [I, color('#8a7a5a')])), { autoShrink: true, minScale: 0.6 }),
+        text('끝맺음', { x: 130, y: 1100, w: 820, h: 120 }, { fontFamily: SERIF, fontSize: 22, color: '#5c4d33', lineHeight: 1.8 }, doc(P('작성　○○', { align: 'right' }), P('0000년 ○월 ○일', { align: 'right' }))),
+      ],
+    }),
+  },
+  {
+    id: 'notice', name: '공지·안내', desc: '색 띠 제목·항목 목록·일시/장소 상자. 커뮤 공지, 행사 안내에', w: 1080, h: 1350,
+    build: () => {
+      const item = (t) => P([['●　', [color('#2f6f5e')]], [t]], { spacing: 14 });
+      return {
+        background: '#ffffff',
+        elements: [
+          text('제목 띠', { x: 0, y: 0, w: 1080, h: 200 }, { fontSize: 50, fontWeight: 700, color: '#ffffff', lineHeight: 1.3, letterSpacing: 6 }, doc(P('공 지', { align: 'center' })),
+            { padding: 64, bg: { color: '#2f6f5e', opacity: 1, radius: 0 } }),
+          text('요약', { x: 80, y: 244, w: 920, h: 50 }, { fontSize: 28, fontWeight: 700, color: '#2f6f5e', lineHeight: 1.4 }, doc(P('제목 또는 한 줄 요약', { align: 'center' }))),
+          hr('구분선', 80, 320, 920, '#dbe7e3', 2),
+          text('항목', { x: 100, y: 360, w: 880, h: 600 }, { fontSize: 26, color: '#333', lineHeight: 1.75 },
+            doc(item('안내할 내용 하나를 씁니다.'), item('두 번째 안내입니다. 길어지면 다음 줄로 이어집니다.'), item('세 번째 안내입니다.'), item('네 번째 안내입니다.')), { autoShrink: true, minScale: 0.6 }),
+          text('일시·장소', { x: 80, y: 1000, w: 920, h: 250 }, { fontSize: 25, color: '#24453c', lineHeight: 1.9 },
+            doc(P([['일시', [B]], ['　0000년 ○월 ○일 ○시']]), P([['장소', [B]], ['　장소 이름']]), P([['문의', [B]], ['　연락처']])),
+            { padding: 40, bg: { color: '#2f6f5e', opacity: 0.1, radius: 20 } }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'poem', name: '시·짧은 글', desc: '넓은 여백에 가운데 정렬. 시, 짧은 독백, 노랫말 대신 쓴 글에', w: 1080, h: 1350,
+    build: () => ({
+      background: '#fbfaf7',
+      elements: [
+        text('제목', { x: 140, y: 190, w: 800, h: 70 }, { fontFamily: SERIF, fontSize: 40, color: '#2b2a27', lineHeight: 1.3 }, doc(P('시 제목', { align: 'center' }))),
+        text('글쓴이', { x: 140, y: 268, w: 800, h: 40 }, { fontFamily: SERIF, fontSize: 22, color: '#9a958b' }, doc(P('이름', { align: 'center' }))),
+        hr('구분선', 510, 340, 60, '#c8c2b6', 2),
+        text('본문', { x: 140, y: 400, w: 800, h: 820 }, { fontFamily: SERIF, fontSize: 28, color: '#3a3833', lineHeight: 2.1 },
+          doc(P('첫 번째 줄\n두 번째 줄\n세 번째 줄', { align: 'center', spacing: 44 }), P('네 번째 줄\n다섯 번째 줄', { align: 'center', spacing: 44 }), P('마지막 줄', { align: 'center' })), { autoShrink: true, minScale: 0.6 }),
+      ],
+    }),
+  },
+  {
+    id: 'memo-board', name: '메모 붙임판', desc: '코르크판에 색 메모지 네 장(살짝 기울임). 할 일·단서 정리에', w: 1080, h: 1080,
+    build: () => {
+      const note = (i, box, bg, deg) => group(`메모 ${i}`, [
+        rect('그림자', { x: box.x + 8, y: box.y + 12, w: box.w, h: box.h, rotation: deg }, '#00000030'),
+        text('메모지', { ...box, rotation: deg }, { fontSize: 26, color: '#3a3a3a', lineHeight: 1.6 }, doc(P('메모 제목', { spacing: 10 }, [B]), P('붙여 둘 내용을 씁니다. 메모지 색은 "글상자 바탕"에서 바꿉니다.')),
+          { padding: 36, autoShrink: true, minScale: 0.6, bg: { color: bg, opacity: 1, radius: 4 } }),
+        oval('핀', { x: box.x + box.w / 2 - 14, y: box.y - 4, w: 28, h: 28 }, '#d6453d', { stroke: '#8f2a24', strokeWidth: 2 }),
+      ]);
+      return {
+        background: '#b8936a',
+        elements: [
+          rect('판 테두리', { x: 30, y: 30, w: 1020, h: 1020 }, '#c9a67b', { stroke: '#8a6a46', strokeWidth: 6, radius: 8 }),
+          note(1, { x: 110, y: 110, w: 400, h: 380 }, '#fff4a3', -3),
+          note(2, { x: 570, y: 130, w: 400, h: 360 }, '#ffd1dc', 2.5),
+          note(3, { x: 120, y: 580, w: 400, h: 370 }, '#c9f0d8', 2),
+          note(4, { x: 580, y: 560, w: 390, h: 400 }, '#cfe3ff', -2),
+        ],
+      };
+    },
+  },
+  {
+    id: 'chapter', name: '장 표지(챕터)', desc: '큰 번호·장 제목·여는 글귀. 연재·장편 로그의 장 사이에', w: 1080, h: 1350,
+    build: () => ({
+      background: '#1c1b22',
+      elements: [
+        text('작은 제목', { x: 80, y: 220, w: 920, h: 40 }, { fontSize: 22, color: '#8d8a96', letterSpacing: 10 }, doc(P('CHAPTER', { align: 'center' }))),
+        text('번호', { x: 80, y: 270, w: 920, h: 250 }, { fontFamily: SERIF, fontSize: 200, color: '#d7b56d', lineHeight: 1.15 }, doc(P('01', { align: 'center' }))),
+        text('장 제목', { x: 80, y: 560, w: 920, h: 90 }, { fontFamily: SERIF, fontSize: 54, fontWeight: 700, color: '#f2efe9', lineHeight: 1.3 }, doc(P('장 제목', { align: 'center' }))),
+        hr('구분선', 500, 680, 80, '#d7b56d', 2),
+        text('여는 글귀', { x: 180, y: 730, w: 720, h: 300 }, { fontFamily: SERIF, fontSize: 26, color: '#b9b5c2', lineHeight: 1.8 },
+          doc(P('이 장을 여는 짧은 글귀나 인용을 씁니다.', { align: 'center', spacing: 18 }, [I]), P('— 출처', { align: 'center' })), { autoShrink: true, minScale: 0.6 }),
+        text('작품 제목', { x: 80, y: 1200, w: 920, h: 40 }, { fontSize: 20, color: '#6d6a76', letterSpacing: 4 }, doc(P('작품 제목', { align: 'center' }))),
+      ],
+    }),
+  },
+];
+
+// ---------- 더 많은 사진이 들어가는 틀(0.17) ----------
+export const MORE_PHOTO_TEMPLATES = [
+  {
+    id: 'vn', name: '비주얼 노벨 대사창', desc: '배경 사진 위에 반투명 대사창과 이름표(16:9). 장면 연출·대사 로그에', w: 1920, h: 1080,
+    build: (ctx) => ({
+      background: '#1a1824',
+      elements: [
+        photo(ctx, '배경 사진', { x: 0, y: 0, w: 1920, h: 1080 }),
+        text('대사창', { x: 80, y: 700, w: 1760, h: 320 }, { fontSize: 38, color: '#ffffff', lineHeight: 1.7 },
+          doc(P('대사를 여기에 씁니다. 대사창 색과 비치는 정도는 속성 패널 "글상자 바탕"의 바탕색·불투명도로 바꿉니다.')),
+          { padding: 52, autoShrink: true, minScale: 0.6, bg: { color: '#14121c', opacity: 0.8, radius: 18, stroke: '#ffffff', strokeWidth: 2 } }),
+        text('이름표', { x: 130, y: 648, w: 320, h: 82 }, { fontSize: 32, fontWeight: 700, color: '#1b1724', lineHeight: 1.4 }, doc(P('이름', { align: 'center' })),
+          { padding: 16, bg: { color: '#e7c46a', opacity: 1, radius: 12 } }),
+        text('넘김 표시', { x: 1750, y: 950, w: 60, h: 50 }, { fontSize: 28, color: '#ffffff', lineHeight: 1.2 }, doc(P('▼', { align: 'center' }))),
+      ],
+    }),
+  },
+  {
+    id: 'film', name: '필름 세 컷', desc: '필름 띠에 사진 세 장 + 아래 제목·설명. 장면 세 개를 이어 보여 줄 때', w: 1080, h: 1350,
+    build: (ctx) => {
+      const holes = [];
+      for (let y = 100; y <= 1040; y += 60) holes.push(rect('구멍', { x: 156, y, w: 22, h: 30 }, '#efece6', { radius: 4 }), rect('구멍', { x: 902, y, w: 22, h: 30 }, '#efece6', { radius: 4 }));
+      return {
+        background: '#efece6',
+        elements: [
+          rect('필름', { x: 140, y: 80, w: 800, h: 1000 }, '#141414'),
+          M.makeElement('group', { name: '필름 구멍', locked: true, children: holes }),
+          photo(ctx, '사진 1', { x: 200, y: 110, w: 680, h: 290 }),
+          photo(ctx, '사진 2', { x: 200, y: 425, w: 680, h: 290 }),
+          photo(ctx, '사진 3', { x: 200, y: 740, w: 680, h: 290 }),
+          text('제목', { x: 140, y: 1112, w: 800, h: 60 }, { fontFamily: SERIF, fontSize: 36, color: '#222', lineHeight: 1.3 }, doc(P('제목', { align: 'center' }))),
+          text('설명', { x: 140, y: 1182, w: 800, h: 120 }, { fontSize: 24, color: '#555', lineHeight: 1.6 }, doc(P('장면 설명을 한두 줄로 씁니다.', { align: 'center' })), { autoShrink: true, minScale: 0.6 }),
+        ],
+      };
+    },
+  },
+  {
+    id: 'magazine', name: '잡지 표지', desc: '사진 전체 + 큰 잡지 이름·호수·커버 기사 제목·작은 기사 목록', w: 1080, h: 1350,
+    build: (ctx) => ({
+      background: '#222222',
+      elements: [
+        photo(ctx, '표지 사진', { x: 0, y: 0, w: 1080, h: 1350 }),
+        rect('아래 어둡게', { x: 0, y: 760, w: 1080, h: 590 }, { type: 'linear', angle: 90, stops: [{ o: 0, c: '#00000000' }, { o: 1, c: '#000000b8' }] }),
+        text('잡지 이름', { x: 60, y: 46, w: 960, h: 150 }, { fontFamily: SERIF, fontSize: 124, fontWeight: 700, color: '#ffffff', letterSpacing: 6, lineHeight: 1.1 }, doc(P('잡지 이름', { align: 'center' }))),
+        text('호수', { x: 60, y: 200, w: 960, h: 36 }, { fontSize: 22, color: '#ffffff', letterSpacing: 4 }, doc(P('0000. 00　VOL. 00', { align: 'center' }))),
+        text('특집 띠', { x: 60, y: 878, w: 260, h: 62 }, { fontSize: 26, fontWeight: 700, color: '#ffffff', lineHeight: 1.4 }, doc(P('특집', { align: 'center' })),
+          { padding: 10, bg: { color: '#e2483d', opacity: 1, radius: 6 } }),
+        text('커버 기사', { x: 60, y: 956, w: 760, h: 180 }, { fontFamily: SERIF, fontSize: 58, fontWeight: 700, color: '#ffffff', lineHeight: 1.25 }, doc(P('커버 기사\n제목을 크게'))),
+        text('작은 기사', { x: 60, y: 1150, w: 760, h: 140 }, { fontSize: 24, color: '#f1f1f1', lineHeight: 1.6 }, doc(P('작은 기사 제목 하나'), P('작은 기사 제목 둘'))),
+      ],
+    }),
+  },
+];
+
+// 0.17에서 더한 틀은 각 목록 뒤에 붙인다(목록 순서 = 화면 순서)
+GLOG_TEMPLATES.push(...MORE_TEXT_TEMPLATES);
+PHOTO_TEMPLATES.push(...MORE_PHOTO_TEMPLATES);
+
 // 목록: 글 위주 틀 + 사진이 들어가는 틀
 export const ALL_TEMPLATES = [...GLOG_TEMPLATES, ...PHOTO_TEMPLATES];
 
@@ -379,11 +628,17 @@ export function sketchSVG(tpl, W = 150, H = 150) {
     else if (n.type === 'text') {
       const fs = Math.max(1.2, (n.style?.fontSize || 32) * k), lh = fs * (n.style?.lineHeight || 1.6);
       const c = n.style?.color || '#333';
-      const rows = Math.max(1, Math.min(Math.floor(h / lh), 60));
       let clip = '';
       if (n.area?.kind === 'image') { const id = `c${clipN++}`; s += `<clipPath id="${id}"><ellipse cx="${x + w / 2}" cy="${y + h * 0.2}" rx="${w * 0.22}" ry="${h * 0.18}"/><path d="M${x + w * 0.1} ${y + h}C${x + w * 0.1} ${y + h * 0.45} ${x + w * 0.9} ${y + h * 0.45} ${x + w * 0.9} ${y + h}Z"/></clipPath>`; clip = ` clip-path="url(#${id})"`; }
       s += `<g${clip}${rot(n, x, y, w, h)}>`;
-      for (let i = 0; i < rows; i++) s += `<rect x="${x}" y="${(y + i * lh + (lh - fs) / 2).toFixed(1)}" width="${(w * (i === rows - 1 && rows > 1 ? 0.6 : 1)).toFixed(1)}" height="${Math.max(0.8, fs * 0.55).toFixed(1)}" fill="${c}" opacity=".55"/>`;
+      if (n.bg && ((n.bg.color && n.bg.color !== 'none') || n.bg.strokeWidth > 0)) {
+        const bf = n.bg.color && n.bg.color !== 'none' ? n.bg.color : 'none';
+        s += n.area?.kind === 'ellipse' ? `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${bf}" fill-opacity="${n.bg.opacity ?? 1}"/>`
+          : `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${R(n.bg.radius || 0)}" fill="${bf}" fill-opacity="${n.bg.opacity ?? 1}"${n.bg.strokeWidth > 0 ? ` stroke="${n.bg.stroke || '#000'}" stroke-width="0.8"` : ''}/>`;
+      }
+      const pad = R(Math.max(0, n.padding || 0));
+      const rowsIn = Math.max(1, Math.min(Math.floor((h - pad * 2) / lh), 60)), iw = Math.max(1, w - pad * 2);
+      for (let i = 0; i < rowsIn; i++) s += `<rect x="${x + pad}" y="${(y + pad + i * lh + (lh - fs) / 2).toFixed(1)}" width="${(iw * (i === rowsIn - 1 && rowsIn > 1 ? 0.6 : 1)).toFixed(1)}" height="${Math.max(0.8, fs * 0.55).toFixed(1)}" fill="${c}" opacity=".55"/>`;
       s += '</g>';
     }
   }

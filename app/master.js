@@ -9,7 +9,7 @@ import { layoutChain } from '../src/layout.js';
 import { renderFrame } from '../src/render.js';
 import { measureGen } from '../src/measure.js';
 import { proxyGen } from '../src/image-src.js';
-import { boxCss, contentOf, textFrame } from './render-el.js';
+import { boxCss, contentOf, textFrame, textBg } from './render-el.js';
 
 export const TOKENS = { page: '{쪽}', total: '{전체쪽}' };
 export const MASTER_KIND = 'master';
@@ -63,7 +63,7 @@ export function buildMasterLayer(master, { num, total }, ctx) {
     if (n.type === 'group' || M.isHidden(n, anc)) return;
     const el = document.createElement('div');
     el.style.cssText = boxCss(n);
-    if (n.type === 'text') { const t = placed.get(n.id); if (t) el.appendChild(t); } else { const c = contentOf(n); if (c) el.appendChild(c); }
+    if (n.type === 'text') { const bg = textBg(n); if (bg) el.appendChild(bg); const t = placed.get(n.id); if (t) el.appendChild(t); } else { const c = contentOf(n); if (c) el.appendChild(c); }
     root.appendChild(el);
   });
   return root;

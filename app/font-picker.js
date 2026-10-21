@@ -1,5 +1,5 @@
 // 글꼴 고르기 칸(속성 패널). 입력칸 + 펼침 목록.
-//   목록: 넣은 글꼴(프로젝트에 포함) → 기본 글꼴 → 시스템 글꼴. 글꼴 이름은 그 글꼴로 그려 미리 보인다.
+//   목록: 넣은 글꼴(이 컴퓨터에 보관, 프로젝트에도 포함) → 기본 글꼴 → 시스템 글꼴. 글꼴 이름은 그 글꼴로 그려 미리 보인다.
 //   입력칸에 치면 목록이 걸러지고, ↑↓로 고르고 Enter. 목록에 없는 이름을 치고 Enter를 누르면 그 이름 그대로 적용.
 //   목록 아래 "글꼴 파일 넣기…"·"시스템 글꼴 불러오기". 넣은 글꼴은 ×로 프로젝트에서 뺄 수 있다.
 // 목록을 누를 때는 포커스를 옮기지 않는다(mousedown 막기) → 글상자 편집 중이면 고른 글자 범위가 그대로 남는다.
@@ -70,7 +70,7 @@ export function fontField({ label, get, set, source, actions = {}, back = () => 
     const groups = [];
     const proj = src.project.filter((f) => match(f.family, f.label));
     proj.forEach((f) => seen.add(f.family.toLowerCase()));
-    groups.push(['넣은 글꼴 (프로젝트에 포함)', proj.map((f) => ({ family: f.family, sub: subOf(f), removable: true })),
+    groups.push(['넣은 글꼴 (이 컴퓨터에 보관 · 모든 프로젝트)', proj.map((f) => ({ family: f.family, sub: subOf(f), removable: true })),
       src.project.length ? '' : '아직 없음 · 아래 "글꼴 파일 넣기…"로 넣으십시오']);
     const plain = (list) => list.filter((n) => { const k = n.toLowerCase(); if (seen.has(k) || !match(n)) return false; seen.add(k); return true; }).map((family) => ({ family }));
     groups.push(['기본 글꼴', plain(src.defaults), '']);
@@ -87,7 +87,7 @@ export function fontField({ label, get, set, source, actions = {}, back = () => 
         html += `<div class="fp-it${it.family.toLowerCase() === cur ? ' cur' : ''}" data-i="${i}" role="option">` +
           `<span class="fp-name" style="font-family:${esc(cssFamily(it.family))}">${esc(it.family)}</span>` +
           (it.sub ? `<span class="fp-sub">${esc(it.sub)}</span>` : '') +
-          (it.removable && actions.remove ? `<button type="button" class="fp-x" data-x="${i}" title="이 글꼴을 프로젝트에서 빼기">×</button>` : '') + '</div>';
+          (it.removable && actions.remove ? `<button type="button" class="fp-x" data-x="${i}" title="이 글꼴 빼기">×</button>` : '') + '</div>';
       }
     }
     if (!items.length && q) html += `<div class="fp-empty">"${esc(filter.trim())}" — 목록에 없습니다. Enter를 누르면 이 이름 그대로 적용합니다.</div>`;

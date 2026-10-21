@@ -59,11 +59,12 @@ export class FontRegistry {
   }
 
   // 글꼴 파일 등록(업로드 글꼴). 화면에서도 쓰이도록 document.fonts에도 넣는다.
-  async register(family, bytes, { weight = '400', style = 'normal', unicodeRange } = {}) {
+  // lib: 내 글꼴(이 컴퓨터에 보관한 글꼴) — 다른 프로젝트를 열어도(unregisterAll) 남는다
+  async register(family, bytes, { weight = '400', style = 'normal', unicodeRange, lib = false } = {}) {
     const face = new FontFace(family, bytes, { weight: String(weight), style, ...(unicodeRange ? { unicodeRange } : {}) });
     await face.load();
     document.fonts.add(face);
-    this.registered.push({ family, weight: String(weight), style, unicodeRange: unicodeRange || null, bytes, face });
+    this.registered.push({ family, weight: String(weight), style, unicodeRange: unicodeRange || null, bytes, face, lib: !!lib });
     return face;
   }
 
@@ -77,10 +78,10 @@ export class FontRegistry {
     this.registered = this.registered.filter((x) => x.family !== family);
   }
 
-  // 등록한 글꼴 모두 해제(다른 프로젝트를 열 때)
+  // 프로젝트 글꼴 모두 해제(다른 프로젝트를 열 때). 내 글꼴(lib)은 남긴다
   unregisterAll() {
-    for (const f of this.registered) if (f.face) document.fonts.delete(f.face);
-    this.registered.length = 0;
+    for (const f of this.registered) if (f.face && !f.lib) document.fonts.delete(f.face);
+    this.registered = this.registered.filter((f) => f.lib);
   }
 
   // 페이지 스타일시트의 @font-face 규칙 목록
@@ -101,9 +102,12 @@ export class FontRegistry {
   async cssFor(families, text) {
     const want = new Set([...families].map((f) => f.toLowerCase()));
     const codes = [...new Set([...text].map((c) => c.codePointAt(0)))];
-    const parts = [];
+    const parts = [], seen = new Set();
     for (const f of this.registered) {
       if (!want.has(f.family.toLowerCase()) || !coversAny(parseRanges(f.unicodeRange), codes)) continue;
+      const k = `${f.family}|${f.weight}|${f.style}|${f.unicodeRange}`;
+      if (seen.has(k)) continue; // 내 글꼴과 프로젝트 글꼴에 같은 것이 있으면 한 번만
+      seen.add(k);
       const url = await bytesToDataURL(f.bytes, sniffMime(f.bytes));
       parts.push(`@font-face{font-family:${JSON.stringify(f.family)};font-weight:${f.weight};font-style:${f.style};` +
         `${f.unicodeRange ? `unicode-range:${f.unicodeRange};` : ''}src:url(${url});}`);

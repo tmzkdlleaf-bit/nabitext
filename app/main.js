@@ -21,6 +21,7 @@ import { AssetStore } from './assets.js';
 import { setImageSource, bumpProxy, BLANK } from '../src/image-src.js';
 import * as P from './project.js';
 import { saveRecovery, orphanRecoveries, clearRecovery, claimTab } from './recovery.js';
+import { listLibraryFonts, putLibraryFonts, deleteLibraryFamily, fontKey } from './font-library.js';
 import * as TPL from './templates.js';
 import { isMaster, newMaster } from './master.js';
 import { FindBar, FIND_CSS } from './find.js';
@@ -44,6 +45,7 @@ const history = new History();
 const keymap = createKeymap();                  // 글상자 편집 단축키
 const appKeymap = createKeymap({}, APP_KEYMAP); // 캔버스 단축키
 const assets = new AssetStore();
+const libFonts = []; // 내 글꼴(아래 loadFontLibrary)
 const swatches = new Swatches();
 // 화면은 큰 사진의 축소본을 쓴다(출력·저장은 원본). 축소본이 준비되면 한 프레임에 모아 다시 그린다
 setImageSource({
@@ -201,7 +203,7 @@ async function loadProject(project, { file = null, dirty = false } = {}) {
   fonts.unregisterAll();
   for (const f of project.fonts || []) {
     const a = assets.get(f.asset);
-    if (a) await fonts.register(f.family, await a.blob.arrayBuffer(), { weight: f.weight, style: f.style });
+    if (a && !fonts.has(f.family, f.weight, f.style)) await fonts.register(f.family, await a.blob.arrayBuffer(), { weight: f.weight, style: f.style });
   }
   app.project = project;
   if (project.swatches) { swatches.list.splice(0, swatches.list.length, ...project.swatches); swatches.emit(); }
@@ -222,7 +224,7 @@ async function loadProject(project, { file = null, dirty = false } = {}) {
   sync();
 }
 
-const ctx = () => ({ assets, docOf: view.docOf, swatches: swatches.list, app: APP_VERSION });
+const ctx = () => ({ assets, docOf: view.docOf, swatches: swatches.list, app: APP_VERSION, extraFonts: libFonts });
 
 // ---------- 저장·열기 ----------
 // 저장 실패 까닭 → 알아듣기 쉬운 말
@@ -408,7 +410,14 @@ async function saveTemplateFromPage() {
   const name = await app.promptText('템플릿 이름', app.current.name || `${app.project.name} 템플릿`);
   if (!name || !name.trim()) return null;
   view.ensurePage(app.current);
-  const bytes = await TPL.pageToZip(app.current, { name: name.trim(), project: app.project, assets, docOf: view.docOf });
+  // 내 글꼴도 템플릿에 같이 담을 수 있게(쓴 글꼴만 담는 것은 pageToZip이 고른다)
+  const libExtra = [];
+  for (const f of libFonts) {
+    if (app.project.fonts.some((x) => fontKey(x) === fontKey(f))) continue;
+    const a = await assets.add(f.blob, { name: f.name });
+    libExtra.push({ family: f.family, weight: f.weight, style: f.style, asset: a.id, ...(f.label ? { label: f.label } : {}) });
+  }
+  const bytes = await TPL.pageToZip(app.current, { name: name.trim(), project: { ...app.project, fonts: [...app.project.fonts, ...libExtra] }, assets, docOf: view.docOf });
   const rec = await TPL.putTemplate({ id: M.uid(), name: name.trim(), w: app.current.w, h: app.current.h, thumb: await thumbOf(app.current), savedAt: new Date().toISOString(), bytes });
   status(`템플릿 "${rec.name}"을(를) 저장했습니다`);
   return rec;
@@ -418,7 +427,7 @@ async function insertTemplate(bytes) {
   const r = await TPL.zipToPage(bytes, { assets, projectStyles: app.project.styles });
   for (const f of r.fonts) {
     if (app.project.fonts.some((x) => x.family === f.family && x.weight === f.weight && x.style === f.style)) continue;
-    await fonts.register(f.family, await f.blob.arrayBuffer(), { weight: f.weight, style: f.style });
+    if (!fonts.has(f.family, f.weight, f.style)) await fonts.register(f.family, await f.blob.arrayBuffer(), { weight: f.weight, style: f.style });
     app.project.fonts.push({ family: f.family, weight: f.weight, style: f.style, asset: f.asset, ...(f.label ? { label: f.label } : {}) });
   }
   syncProjectFonts();
@@ -585,7 +594,7 @@ $('sysFonts').onclick = () => loadSystemFonts();
 // 넣은 글꼴 목록(속성 패널): 이름별로 굵기를 묶는다
 function syncProjectFonts() {
   const by = new Map();
-  for (const f of app.project.fonts) {
+  for (const f of [...libFonts, ...app.project.fonts.filter((x) => !libFonts.some((l) => fontKey(l) === fontKey(x)))]) {
     let g = by.get(f.family);
     if (!g) by.set(f.family, (g = { family: f.family, label: null, faces: [] }));
     g.faces.push({ weight: f.weight, style: f.style });
@@ -602,26 +611,51 @@ function relayoutFonts() {
   thumbs?.invalidateAll();
 }
 
-// 글꼴 파일 넣기: 프로젝트에 포함되어 다른 컴퓨터에서 열어도 같은 글꼴로 보인다.
+// 내 글꼴: 넣은 글꼴은 이 컴퓨터에 보관해 두고(app/font-library.js) 모든 프로젝트의 글꼴 목록에 보인다.
+//   libFonts: [{ family, weight, style, label, name, blob }]. 저장할 때 그 프로젝트에서 쓴 것만 파일에 같이 넣는다(ctx().extraFonts)
+async function loadFontLibrary() {
+  let recs = [];
+  try { recs = await listLibraryFonts(); } catch (err) { console.warn('내 글꼴을 불러오지 못함', err); return; }
+  for (const r of recs) {
+    try {
+      if (!fonts.has(r.family, r.weight, r.style)) await fonts.register(r.family, await r.blob.arrayBuffer(), { weight: r.weight, style: r.style, lib: true });
+      else for (const x of fonts.registered) if (x.family === r.family && x.weight === r.weight && x.style === r.style) x.lib = true;
+      libFonts.push({ family: r.family, weight: r.weight, style: r.style, label: r.label || null, name: r.name || '', blob: r.blob });
+    } catch (err) { console.warn('내 글꼴 하나를 읽지 못함', r.family, err); }
+  }
+}
+app.fontLibrary = libFonts;
+
+// 글꼴 파일 넣기: 이 컴퓨터의 "내 글꼴"에 보관되고(다음에 켜도, 새 프로젝트에서도 그대로),
+// 이 프로젝트에도 포함되어 다른 컴퓨터에서 열어도 같은 글꼴로 보인다.
 //   글꼴 이름·굵기·기울임은 파일 안 이름표에서 읽는다(WOFF2는 파일 이름으로 짐작) → 같은 글꼴의 굵기별 파일이 한 글꼴로 묶인다.
 //   새 글꼴이 한 가지이고 글상자를 고른 상태(편집 중이면 글자를 고른 상태)면 바로 적용한다(되돌리기 가능).
 const FONT_FILE = /\.(ttf|otf|ttc|woff2?)$/i;
 async function addFontFiles(files, { apply = true } = {}) {
-  const added = [], dup = [], failed = [];
+  const added = [], dup = [], failed = [], keep = [];
   for (const f of files) {
     try {
       const buf = await f.arrayBuffer();
       const info = fontInfo(f.name, buf);
-      if (app.project.fonts.some((x) => x.family === info.family && x.weight === info.weight && x.style === info.style)) { dup.push(info.family); continue; }
+      const inProject = app.project.fonts.some((x) => x.family === info.family && x.weight === info.weight && x.style === info.style);
+      const inLib = libFonts.some((x) => fontKey(x) === fontKey(info));
+      if (inProject && inLib) { dup.push(info.family); continue; }
       const a = await assets.add(buf, { name: f.name });
-      await fonts.register(info.family, await a.blob.arrayBuffer(), { weight: info.weight, style: info.style });
-      app.project.fonts.push({ family: info.family, weight: info.weight, style: info.style, asset: a.id, ...(info.label ? { label: info.label } : {}) });
+      if (!fonts.has(info.family, info.weight, info.style)) await fonts.register(info.family, await a.blob.arrayBuffer(), { weight: info.weight, style: info.style, lib: true });
+      else for (const x of fonts.registered) if (x.family === info.family && x.weight === info.weight && x.style === info.style) x.lib = true;
+      if (!inProject) app.project.fonts.push({ family: info.family, weight: info.weight, style: info.style, asset: a.id, ...(info.label ? { label: info.label } : {}) });
+      if (!inLib) {
+        const rec = { family: info.family, weight: info.weight, style: info.style, label: info.label || null, name: f.name || '', blob: a.blob };
+        libFonts.push(rec); keep.push(rec);
+      }
       added.push(info);
     } catch (err) {
       console.warn('글꼴 넣기 실패', f.name, err);
       failed.push(f.name);
     }
   }
+  let kept = true;
+  if (keep.length) { try { await putLibraryFonts(keep); } catch (err) { kept = false; console.warn('내 글꼴에 보관하지 못함', err); } }
   if (added.length) {
     syncProjectFonts();
     relayoutFonts();
@@ -635,7 +669,7 @@ async function addFontFiles(files, { apply = true } = {}) {
     if (target) { props.setMark('font', { value: fontStack(fams[0]) }); applied = true; }
   }
   const msg = [];
-  if (fams.length) msg.push(`글꼴 ${fams.map((f) => `"${f}"`).join(', ')}을(를) 넣었습니다${applied ? ' · 고른 글자에 적용함' : ' · 글꼴 칸 목록 맨 위 "넣은 글꼴"에서 고르십시오'}`);
+  if (fams.length) msg.push(`글꼴 ${fams.map((f) => `"${f}"`).join(', ')}을(를) 넣었습니다${kept ? ' · 이 컴퓨터에 보관해 다른 프로젝트에서도 씁니다' : ' · 이 컴퓨터에 보관하지 못해 이 프로젝트에만 들어갑니다'}${applied ? ' · 고른 글자에 적용함' : ' · 글꼴 칸 목록 맨 위 "넣은 글꼴"에서 고르십시오'}`);
   if (dup.length) msg.push(`이미 있는 글꼴 ${dup.length}개는 건너뜀`);
   if (failed.length) msg.push(`읽지 못한 파일: ${failed.join(', ')} (깨졌거나 글꼴 파일이 아님)`);
   status(msg.join(' · ') || '넣은 글꼴이 없습니다');
@@ -650,9 +684,14 @@ async function pickFontFiles() {
 }
 // 넣은 글꼴 빼기(그 글꼴을 쓴 글자는 대체 글꼴로 보임). 되돌리기 대상이 아니라 먼저 묻는다
 async function removeProjectFont(family) {
-  const r = await ask(`글꼴 "${family}"을(를) 프로젝트에서 뺄까요?\n이 글꼴을 쓴 글자는 다른 글꼴로 보이게 됩니다. 되돌리기로 되살릴 수 없습니다.`, [['remove', '빼기'], ['cancel', '취소']]);
+  const inLib = libFonts.some((f) => f.family === family);
+  const r = await ask(`글꼴 "${family}"을(를) ${inLib ? '내 글꼴(이 컴퓨터 보관함)과 이 프로젝트에서' : '프로젝트에서'} 뺄까요?\n이 글꼴을 쓴 글자는 다른 글꼴로 보이게 됩니다. 되돌리기로 되살릴 수 없습니다.${inLib ? '\n이미 저장한 다른 프로젝트 파일 안의 글꼴은 그대로 남습니다.' : ''}`, [['remove', '빼기'], ['cancel', '취소']]);
   if (r !== 'remove') return false;
   app.project.fonts = app.project.fonts.filter((f) => f.family !== family);
+  if (inLib) {
+    for (let i = libFonts.length - 1; i >= 0; i--) if (libFonts[i].family === family) libFonts.splice(i, 1);
+    await deleteLibraryFamily(family).catch((err) => console.warn('내 글꼴에서 지우지 못함', err));
+  }
   fonts.unregister(family);
   syncProjectFonts();
   relayoutFonts();
@@ -932,6 +971,7 @@ platform.onMenu(async (cmd) => {
 });
 
 // ---------- 시작 ----------
+await loadFontLibrary();
 await loadProject(app.project);
 Object.assign(window.__nabi, {
   ready: true, app, view, history, keymap, appKeymap, fonts, M, P, platform, layers, props, pagesPanel, swatches, assets, ask, promptText,

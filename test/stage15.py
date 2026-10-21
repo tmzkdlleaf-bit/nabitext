@@ -65,7 +65,7 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(OUT, 'stage15-templates-photo.png'))
     tabok = E("!document.querySelector('.tpl-list[data-sec=photo]').hidden && document.querySelector('.tpl-list[data-sec=text]').hidden")
     E("document.querySelector('.tpl-tabs [data-sec=text]').click()")
-    check('G1 템플릿 창 맨 위 기본 틀 18종(탭: 글 위주 11 / 사진이 들어가는 틀 7), 각각 그림 미리보기', len(cards) == 18 and all(c[2] for c in cards) and len(heads) == 2 and tabok, [heads, tabok, cards])
+    check('G1 템플릿 창 맨 위 기본 틀 30종(탭: 글 위주 20 / 사진이 들어가는 틀 10), 각각 그림 미리보기', len(cards) == 30 and all(c[2] for c in cards) and len(heads) == 2 and tabok, [heads, tabok, cards])
     E("document.querySelector('.tpl-builtin [data-glog=novel] [data-act=glog]').click()"); time.sleep(0.6)
     check('G2 "새 장으로" → 창이 닫히고 그 틀로 새 장(지금 장 뒤), 장 이름 = 틀 이름', not E("!!document.querySelector('.modal-bg')") and E("__nabi.app.current.name") == '소설 페이지' and size() == [1080, 1528], [E("__nabi.app.current.name"), size()])
     ids = [c[0] for c in cards]
@@ -81,7 +81,7 @@ with sync_playwright() as p:
           return { w: pg.w, h: pg.h, texts: texts.length, over, empty, slots: slots.length, imgsOk, cur: __nabi.app.current === pg }; }""", i)
         rep[i] = r
     bad = {k: v for k, v in rep.items() if v['over'] or not v['imgsOk'] or not v['cur'] or v['empty']}
-    check('G3 18종 모두 새 장으로: 글이 상자 밖으로 넘치지 않음(제목처럼 짧은 글이 사라지지 않음), 사진 자리는 이미지 슬롯', not bad, bad or rep)
+    check('G3 30종 모두 새 장으로: 글이 상자 밖으로 넘치지 않음(제목처럼 짧은 글이 사라지지 않음), 사진 자리는 이미지 슬롯', not bad, bad or rep)
     col = E("""(async () => { await __nabi.app.insertGlog('news'); await new Promise((r) => setTimeout(r, 250)); const V = __nabi.view; let c1 = null;
       __nabi.M.walk(V.page.elements, (n) => { if (n.name === '본문 1단') c1 = n; }); const ed = V.editorOf(c1);
       return { frames: ed.members.length, lines: (ed.results || []).map((r) => r.lines.length) }; })()""")
@@ -117,16 +117,16 @@ with sync_playwright() as p:
     for i in ids:
         u = E("""async (id) => { await __nabi.app.insertGlog(id); await new Promise((r) => setTimeout(r, 200)); const EX = await import('/src/export.js'); return (await EX.rasterize(__nabi.view.exportPage(), { scale: 0.4 })).toDataURL(); }""", i)
         shots.append(Image.open(io.BytesIO(base64.b64decode(u.split(',', 1)[1]))).convert('RGB'))
-    W = 6 * 440; rows = [shots[i:i + 6] for i in range(0, len(shots), 6)]
+    W = 6 * 780; rows = [shots[i:i + 6] for i in range(0, len(shots), 6)]
     sheet = Image.new('RGB', (W, sum(max(s.height for s in r) for r in rows) + 20), '#777')
     y = 0
     for r in rows:
         x = 0
-        for s in r: sheet.paste(s, (x, y)); x += 440
+        for s in r: sheet.paste(s, (x, y)); x += 780
         y += max(s.height for s in r) + 10
     sheet.save(os.path.join(OUT, 'stage15-glog.png'))
     nonblank = [len(set(s.resize((40, 40)).getdata())) > 3 for s in shots]
-    check('G7 18종 모두 PNG로 내보내짐(빈 그림 아님)', all(nonblank), nonblank)
+    check('G7 30종 모두 PNG로 내보내짐(빈 그림 아님)', all(nonblank), nonblank)
     saved = E("""(async () => { const { bytes } = await __nabi.P.toZip(__nabi.app.project, { assets: __nabi.assets, docOf: __nabi.view.docOf, swatches: [] }); let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); })()""")
     before = E("JSON.stringify(__nabi.app.project.pages.map((p) => [p.name, p.w, p.h, p.elements.length]))")
     E("(b) => __nabi.openBytes(Uint8Array.from(atob(b), (c) => c.charCodeAt(0)), null, '틀.nabi')", saved); time.sleep(1.5)

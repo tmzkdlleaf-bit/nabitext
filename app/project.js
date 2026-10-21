@@ -59,7 +59,8 @@ const assetPath = (a) => `assets/${a.id}.${extOf(a.type)}`;
 
 // 프로젝트 → project.json 내용 + 쓰인 에셋 id. 에셋이 아닌 주소(붙여넣은 원격 이미지 등)는 가져와 에셋으로 만든다.
 // 가져오지 못한 주소는 그대로 두고 missing에 모은다.
-export async function toJSON(project, { assets, docOf, swatches, app = '' }) {
+// extraFonts: 내 글꼴(이 컴퓨터 보관함) [{ family, weight, style, label, blob }] — 이 프로젝트에서 쓴 것만 파일에 같이 넣는다
+export async function toJSON(project, { assets, docOf, swatches, app = '', extraFonts = [] }) {
   const firsts = M.storyFirsts(project.pages);
   const pages = JSON.parse(JSON.stringify(project.pages.map((p) => M.serializePage(p, docOf, firsts))));
   // 공통 장: 요소가 있을 때만 저장(공통 장 안의 이어진 글은 공통 장 안에서만)
@@ -77,6 +78,18 @@ export async function toJSON(project, { assets, docOf, swatches, app = '' }) {
     if (!a) continue;
     used.add(a.id);
     fonts.push({ family: f.family, weight: f.weight, style: f.style, file: assetPath(a), ...(f.label ? { label: f.label } : {}) });
+  }
+  if (extraFonts.length) {
+    // 글꼴 이름은 글자 꾸밈("이름", 대체 글꼴…)·글상자 기본 모양·프리셋에 들어 있다
+    const text = JSON.stringify([pages, master, project.styles || {}]);
+    const have = new Set(fonts.map((f) => `${f.family}|${f.weight}|${f.style}`));
+    for (const f of extraFonts) {
+      const k = `${f.family}|${f.weight}|${f.style}`;
+      if (have.has(k) || !f.blob || !text.includes(JSON.stringify(f.family).slice(1, -1))) continue;
+      const a = await assets.add(f.blob, { name: f.name || '' });
+      used.add(a.id); have.add(k);
+      fonts.push({ family: f.family, weight: f.weight, style: f.style, file: assetPath(a), ...(f.label ? { label: f.label } : {}) });
+    }
   }
   const json = { format: FORMAT, version: VERSION, app, name: project.name, savedAt: new Date().toISOString(), pages, swatches: swatches ?? project.swatches ?? [], fonts, styles: cleanStyles(project.styles), grid: cleanGrid(project.grid),
     ...(master ? { master } : {}), ...(project.pageStart && project.pageStart !== 1 ? { pageStart: project.pageStart } : {}) };

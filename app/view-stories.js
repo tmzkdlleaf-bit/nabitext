@@ -6,7 +6,7 @@ import { CanvasEditor } from '../src/editor.js';
 import { buildRegion } from '../src/region.js';
 import * as G from './geom.js';
 import * as M from './model.js';
-import { pageCss, pageBgCss, boxCss, contentOf, textFrame } from './render-el.js';
+import { pageCss, pageBgCss, boxCss, contentOf, textFrame, textBg } from './render-el.js';
 import { mixin } from './util.js';
 import { buildMasterLayer } from './master.js';
 import { displaySrc, srcReady, srcDims, withOriginals, withThumbs } from '../src/image-src.js';
@@ -185,6 +185,8 @@ class StoryMethods {
         else {
           const ed = this.editorOf(n);
           const k = ed ? ed.members.indexOf(n.id) : -1;
+          const bg = textBg(n);
+          if (bg) el.appendChild(bg);
           if (k >= 0) el.appendChild(ed.exportFrame(k, { reuse: mode === 'thumb' }).render());
         }
         root.appendChild(el);

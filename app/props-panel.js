@@ -3,6 +3,7 @@
 // 글자 속성은 글상자를 편집 중이면 편집기의 선택 범위에(빈 선택이면 다음 입력 글자에), 편집 중이 아니면 선택한 글상자 전체에 적용한다.
 // 숫자 칸: Enter·칸 벗어남 = 적용, Esc = 취소, ↑↓ = 1씩(Shift = 10씩, 이어서 누르면 되돌리기 한 단위).
 
+import { openSymbolPicker } from './symbols.js';
 import { BASE_STYLE } from '../src/layout.js';
 import * as M from './model.js';
 import { ColorField, MIXED, normHex } from './color.js';
@@ -71,7 +72,7 @@ const BLENDS = [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스
   ['exclusion', '제외'], ['hue', '색조'], ['saturation', '채도'], ['color', '색상'], ['luminosity', '광도']];
 
 const TOGGLE_ICONS = { B: 'bold', I: 'italic', U: 'underline', S: 'strikethrough', '왼쪽': 'align-left', '가운데': 'align-center', '오른쪽': 'align-right', '양쪽': 'align-justify' };
-const EDIT_CLOSED = new Set(['배치', '모양', '글상자 모양', '글 흐름']); // 글상자 편집 중 처음에 접어 두는 칸
+const EDIT_CLOSED = new Set(['배치', '모양', '글상자 바탕', '글상자 모양', '글 흐름']); // 글상자 편집 중 처음에 접어 두는 칸
 const CLOSED = new Set(['필터', '마스크']);                                // 그 밖에 처음에 접어 두는 칸
 const CLOSED_PREF = 'nabitext.props.closed';
 
@@ -368,6 +369,10 @@ export class PropsPanel {
     );
     this.row(this.color('색', () => this.markValue('color', (a) => a.value, (ed) => this.frameStyle(ed, 'color')), (c) => this.setMark('color', { value: c })));
     this.row(this.color('형광펜', () => this.markValue('highlight', (a) => a.value, () => ''), (c) => this.setMark('highlight', c ? { value: c } : null), true));
+    // 기호 넣기(말줄임표·가로선·괄호·도형…): 편집 중이면 커서 자리에, 아니면 고른 글상자 끝에
+    const symBtn = this.button('기호 넣기 …— ※', () => openSymbolPicker({ anchor: symBtn.el, insert: (t) => this.insertSymbol(t) }), '말줄임표·가로선·괄호·도형·화살표 같은 기호를 눌러서 넣습니다');
+    symBtn.el.dataset.field = '기호 넣기';
+    this.row(symBtn);
     if (isMaster(v.page) && v.editing) {
       // 공통 장 글상자: 장마다 번호로 바뀌는 자리 표시
       const put = (t) => { const ed = v.activeEditor; if (ed) { ed.insertText(t); ed.focus(); } };
@@ -377,6 +382,7 @@ export class PropsPanel {
     this.buildPresets();
     const { nodes } = this.textTargets();
     this.row(this.num('안쪽 여백', () => same(nodes.map((n) => n.padding || 0)), (p) => v.setProps({ padding: p }, nodes.map((n) => n.id)), { min: -200 }));
+    this.buildTextBg(nodes);
     this.buildArea(nodes);
     this.buildFlow(nodes);
   }
@@ -475,6 +481,53 @@ export class PropsPanel {
     if (!v.editing && sel.length === 2 && sel.every((n) => n?.type === 'text') && M.storyOf(sel[0]) !== M.storyOf(sel[1]))
       this.row(this.button('글상자 잇기', () => v.linkFrames(sel[0].id, sel[1].id), '먼저 고른 글상자에서 넘친 글이 나중 고른 글상자로 이어집니다'));
     if (!v.editing) this.note('넘친 글상자의 빨간 +(출구)를 누르고 다른 글상자나 빈 곳을 누르면 이어집니다.');
+  }
+
+  // 기호 하나 넣기. 편집 중이 아니면 고른 글상자(첫 번째)를 편집 상태로 바꾸고 글 끝에 넣는다
+  insertSymbol(t) {
+    const v = this.view;
+    let ed = v.editing ? v.activeEditor : null;
+    if (!ed) {
+      const n = this.textTargets().nodes[0];
+      if (!n) return false;
+      v.enterEdit(n.id);
+      ed = v.activeEditor;
+      if (!ed) return false;
+      const end = Math.max(1, ed.state.doc.content.size - 1);
+      ed.selectRange(end, end);
+    }
+    if (ed.comp) ed.commitComposition();
+    ed.insertText(t);
+    ed.focus();
+    return true;
+  }
+
+  // 글상자 바탕: 색 채우기 + 불투명도, 모서리 둥글기, 테두리. 글상자 모양(원·도넛·자유형)을 따라 칠한다
+  buildTextBg(nodes) {
+    const v = this.view;
+    if (!nodes.length) return;
+    const B = (k, d) => same(nodes.map((n) => n.bg?.[k] ?? d));
+    const on = () => same(nodes.map((n) => !!(n.bg?.color && n.bg.color !== 'none')));
+    // 바탕 값 바꾸기. 끌며 바꾸는 중(live)이면 한 단위로 묶는다
+    const setB = (patch, live, key = 'bg') => v.change(live ? 'live:' + key : 'props', () => {
+      for (const n of nodes) {
+        const b = { color: 'none', opacity: 1, radius: 0, ...(n.bg || {}), ...patch };
+        n.bg = b.color === 'none' && !(b.strokeWidth > 0) ? undefined : b;
+      }
+    });
+    this.section('글상자 바탕');
+    this.row(this.color('바탕색', () => { const c = B('color', ''); return c === 'none' ? '' : c; }, (c, live) => setB({ color: c || 'none' }, live, 'bg-color'), true));
+    const hasRect = nodes.some((n) => !n.area || n.area.kind === 'rect' || n.area.kind === 'image' || n.area.invert);
+    this.row(
+      this.num('불투명도', () => { const x = B('opacity', 1); return x === MIXED ? x : Math.round(x * 100); }, (o, live) => setB({ opacity: Math.max(0, Math.min(100, o)) / 100 }, live, 'bg-op'), { suffix: '%', min: 0, max: 100 }),
+      hasRect ? this.num('모서리', () => B('radius', 0), (r, live) => setB({ radius: Math.max(0, r) }, live, 'bg-r'), { min: 0 }) : null,
+    );
+    this.row(
+      this.color('테두리', () => B('stroke', '#000000'), (c, live) => c && setB({ stroke: c }, live, 'bg-stroke')),
+      this.num('두께', () => B('strokeWidth', 0), (w, live) => setB({ strokeWidth: Math.max(0, w) }, live, 'bg-sw'), { min: 0 }),
+    );
+    if (on() !== true) this.note('바탕색을 고르면 글상자 뒤를 칠합니다. 불투명도를 낮추면 뒤 그림이 비쳐 보입니다.');
+    else this.row(this.button('바탕 없애기', () => v.change('props', () => { for (const n of nodes) n.bg = undefined; }), '바탕색과 테두리를 모두 지웁니다'));
   }
 
   // 글상자 모양: 사각형 / 원 / 도넛 / 자유형(도형에서) / 이미지 외곽선. 여백(안쪽 여백)·다듬기·최소 구간·반전
